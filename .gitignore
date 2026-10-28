@@ -1,0 +1,31 @@
+# Environment files — NEVER commit real secrets
+.env
+.env.local
+.env.production
+.env.*.local
+!.env.example
+
+# Node
+node_modules/
+dist/
+build/
+.cache/
+
+# Vite
+frontend/dist/
+frontend/.cache/
+
+# TypeScript
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
