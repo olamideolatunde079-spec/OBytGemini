@@ -46,7 +46,17 @@ export default function SignInPage() {
     setLoading(true);
     try {
       if (mode === "signin") {
-        await signInWithEmail(email, password);
+        try {
+          await signInWithEmail(email, password);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Authentication failed";
+          if (message.toLowerCase().includes("user") || message.toLowerCase().includes("invalid") || message.toLowerCase().includes("password")) {
+            setError("That email/password combination was not found. Sign up first or use Continue with GitHub if you signed in with GitHub.");
+          } else {
+            setError(message);
+          }
+          return;
+        }
       } else {
         if (!name.trim()) {
           setError("Please enter your name.");
@@ -104,15 +114,16 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-indigo-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-10">
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">
-            <span className="text-white text-2xl font-bold">O</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">OBytGemini</h1>
-          <p className="text-sm text-gray-500 mt-1">Multi-provider AI assistant</p>
+          <img
+            src="/images/obytgemini-logo-alt.png"
+            alt="OBytGemini"
+            className="mb-4 h-16 w-64 object-contain"
+          />
+          <p className="text-sm text-gray-500">Your AI, your choice of models</p>
         </div>
 
         {/* Card */}

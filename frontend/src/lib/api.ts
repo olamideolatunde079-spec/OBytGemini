@@ -66,6 +66,17 @@ export async function updateChat(
 }
 
 // Streaming message send — returns an async generator of text chunks
+export async function generateImage(payload: {
+  provider: "google" | "openai";
+  prompt: string;
+}): Promise<{ provider: string; model: string; mimeType: string; data: string }> {
+  const data = await fetchJSON<{ image: { provider: string; model: string; mimeType: string; data: string } }>(`${BASE}/images`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return data.image;
+}
+
 export async function* sendMessage(
   chatId: string,
   content: string,

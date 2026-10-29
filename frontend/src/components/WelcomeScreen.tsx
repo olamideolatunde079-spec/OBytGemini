@@ -31,9 +31,12 @@ export default function WelcomeScreen({ onPrompt, userName }: Props) {
   return (
     <div className="flex flex-col items-center justify-center flex-1 px-4 pb-8 h-full">
       {/* Brand mark */}
-      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-5 shadow-md">
-        <span className="text-white text-xl font-bold">O</span>
-      </div>
+      <img
+        src="/images/obytgemini-logo.png"
+        alt=""
+        aria-hidden="true"
+        className="w-16 h-16 object-contain mb-5"
+      />
 
       <h1 className="text-3xl font-bold text-gray-900 mb-1">{greeting}</h1>
       <p className="text-lg text-gray-500 mb-8">How can OBytGemini help you today?</p>

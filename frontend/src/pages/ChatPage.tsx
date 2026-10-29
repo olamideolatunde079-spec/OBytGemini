@@ -8,6 +8,7 @@ import {
   fetchModels,
   fetchChat,
   createChat,
+  generateImage,
   sendMessage,
 } from "../lib/api.js";
 import type { Chat, Message, ModelInfo } from "../types/index.js";
@@ -25,8 +26,8 @@ export default function ChatPage() {
   // Model state
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [provider, setProvider] = useState("groq");
-  const [model, setModel] = useState("openai/gpt-oss-120b");
+  const [provider, setProvider] = useState("google");
+  const [model, setModel] = useState("gemini-3.8-flash");
   const [loadingModels, setLoadingModels] = useState(true);
 
   // Chat state
@@ -37,6 +38,7 @@ export default function ChatPage() {
   // Composer state
   const [input, setInput] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [imageMode, setImageMode] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -224,6 +226,48 @@ export default function ChatPage() {
     refreshChats(); // Refresh sidebar titles
   }, [input, generating, chatId, provider, model, navigate, refreshChats]);
 
+  const handleGenerateImage = useCallback(async () => {
+    const prompt = input.trim();
+    if (!prompt || generating || (provider !== "google" && provider !== "openai")) return;
+
+    setError(null);
+    setGenerating(true);
+    const promptMessage: Message = {
+      id: `tmp-${Date.now()}`,
+      chatId: chatId ?? "",
+      role: "user",
+      content: prompt,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((previous) => [...previous, promptMessage]);
+
+    try {
+      const image = await generateImage({ provider, prompt });
+      setInput("");
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `image-${Date.now()}`,
+          chatId: chatId ?? "",
+          role: "assistant",
+          content: prompt,
+          provider: image.provider,
+          model: image.model,
+          imageDataUrl: `data:${image.mimeType};base64,${image.data}`,
+          mimeType: image.mimeType,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    } catch (err: unknown) {
+      setMessages((previous) =>
+        previous.filter((message) => message.id !== promptMessage.id)
+      );
+      setError(err instanceof Error ? err.message : "Image generation failed.");
+    } finally {
+      setGenerating(false);
+    }
+  }, [input, generating, provider, chatId]);
+
   const handleCancel = () => {
     abortRef.current?.abort();
     setError("Generation stopped. Your prompt was not added to chat history.");
@@ -232,6 +276,7 @@ export default function ChatPage() {
   const handleModelChange = (p: string, m: string) => {
     setProvider(p);
     setModel(m);
+    if (p !== "google" && p !== "openai") setImageMode(false);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -335,13 +380,19 @@ export default function ChatPage() {
         <PromptComposer
           value={input}
           onChange={setInput}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
+          onSubmit={imageMode ? handleGenerateImage : handleSubmit}
+          onCancel={imageMode ? undefined : handleCancel}
           loading={generating}
           models={models}
           provider={provider}
           model={model}
           onModelChange={handleModelChange}
+          imageMode={imageMode}
+          canGenerateImages={
+            (provider === "google" || provider === "openai") &&
+            models.some((item) => item.provider === provider && item.available)
+          }
+          onImageModeChange={setImageMode}
           disabled={loadingChat || loadingModels || !selectedModelAvailable}
         />
       </div>

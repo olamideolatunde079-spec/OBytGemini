@@ -1,6 +1,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCopy, faCheck, faBolt } from "@fortawesome/free-solid-svg-icons";
 import type { Message } from "../types/index.js";
@@ -38,11 +39,20 @@ export default function MessageBubble({ message, streaming }: Props) {
               : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm"
           }`}
         >
-          {isUser ? (
+          {message.imageDataUrl ? (
+            <div className="space-y-2">
+              <img
+                src={message.imageDataUrl}
+                alt={message.content || "Generated image"}
+                className="max-w-full rounded-xl border border-gray-200 bg-gray-50"
+              />
+              {message.content && <p className="whitespace-pre-wrap text-gray-700">{message.content}</p>}
+            </div>
+          ) : isUser ? (
             <p className="whitespace-pre-wrap">{message.content}</p>
           ) : (
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                 {message.content}
               </ReactMarkdown>
               {streaming && (

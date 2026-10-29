@@ -1,153 +1,127 @@
 # OBytGemini
 
-A multi-provider AI chat application with a Gemini-inspired interface. Sign in with GitHub, pick a model, and chat — all conversations are saved to Neon PostgreSQL.
+A multi-provider AI chat application with a Gemini-inspired interface. Sign in with email/password or GitHub, pick a model, and chat — all conversations are saved to Neon PostgreSQL.
 
 ## Tech Stack
 
 | Layer | Technologies |
 |-------|-------------|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Font Awesome |
-| Backend | Node.js, Express 5, TypeScript, tsx |
-| AI | Vercel AI SDK — Groq, OpenAI, Google Gemini, Anthropic, DeepSeek, xAI |
-| Database | Neon PostgreSQL + Drizzle ORM |
-| Auth | Better Auth with GitHub OAuth |
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS v4, Font Awesome 7 |
+| Backend | Node.js 22, Express 5, TypeScript, tsx |
+| AI | Vercel AI SDK v7 — Groq, OpenAI, Google Gemini, Anthropic, DeepSeek, xAI |
+| Database | Neon PostgreSQL (node-postgres) + Drizzle ORM |
+| Auth | Better Auth v1 — email/password + GitHub OAuth |
 
 ## Quick Start
 
 ### 1. Install dependencies
 
 ```bash
-# From the repo root
-npm run install:all
+cd backend && npm install
+cd ../frontend && npm install
 ```
 
-### 2. Configure the backend
+### 2. Configure backend
 
 ```bash
 cp backend/.env.example backend/.env
 ```
 
-Edit `backend/.env` and fill in:
+Fill in `backend/.env`:
 
-| Variable | Where to get it |
-|----------|----------------|
-| `DATABASE_URL` | Neon console → Connection Details → **Pooled** connection string (remove `channel_binding=require`) |
-| `DATABASE_URL_DIRECT` | Same but use the **Direct** (non-pooler) hostname — used by drizzle-kit |
-| `BETTER_AUTH_SECRET` | Any random 32+ character string |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub → Settings → Developer settings → OAuth Apps |
-| `GROQ_API_KEY` | console.groq.com |
-| `OPENAI_API_KEY` | platform.openai.com |
-| `GEMINI_API_KEY` | Google AI Studio |
-| `ANTHROPIC_API_KEY` | console.anthropic.com |
-| `DEEPSEEK_API_KEY` | platform.deepseek.com |
-| `XAI_API_KEY` | console.x.ai |
-
-Email/password accounts require a password of at least 12 characters. Better Auth
-handles password hashing and stores sessions and account records in Neon.
-
-The backend model registry currently uses documented model IDs for each
-configured provider:
-
-| Provider | Model ID | Official model documentation |
-|----------|----------|-------------------------------|
-| Groq | `openai/gpt-oss-120b` | [Groq models](https://console.groq.com/docs/models) |
-| OpenAI | `gpt-6-luna` | [OpenAI models](https://developers.openai.com/api/docs/models) |
-| Google | `gemini-4-argon` | [Gemini models](https://ai.google.dev/gemini-api/docs/models) |
-| Anthropic | `claude-haiku-5-5` | [Claude models](https://platform.claude.com/docs/en/models/overview) |
-| DeepSeek | `deepseek-flash` | [DeepSeek models](https://api-docs.deepseek.com/quick_start/pricing) |
-| xAI | `grok-4.7` | [xAI models](https://docs.x.ai/developers/models) |
-
-Model availability can change; verify the provider's current model catalog
-before upgrading these identifiers.
+| Variable | Where to get it | Notes |
+|----------|----------------|-------|
+| `DATABASE_URL` | Neon → Connection Details → **Pooler** | Remove `channel_binding=require` |
+| `DATABASE_URL_DIRECT` | Neon → Connection Details → **Direct** | Used by drizzle-kit only |
+| `BETTER_AUTH_SECRET` | Any random 32+ char string | |
+| `GITHUB_CLIENT_ID/SECRET` | github.com/settings/developers → OAuth Apps | Callback: `http://localhost:5000/api/auth/callback/github` |
+| `GEMINI_API_KEY` | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) | Must start with `AIza` |
+| `GROQ_API_KEY` | console.groq.com | Free tier works |
+| `OPENAI_API_KEY` | platform.openai.com | Requires billing |
+| `ANTHROPIC_API_KEY` | console.anthropic.com | Requires billing |
+| `DEEPSEEK_API_KEY` | platform.deepseek.com | Requires balance |
+| `XAI_API_KEY` | console.x.ai | Optional |
 
 ### 3. Set up the database
 
 ```bash
-npm run db:push
+cd backend && npm run db:push
 ```
 
-This pushes the Drizzle schema to your Neon database (creates all tables).
-For a migration-based deployment, review generated SQL in `backend/drizzle/`
-before running `npm run db:migrate`. The initial migration has been generated
-but not applied here; reconcile its history with an existing Neon schema
-before applying it to avoid creating tables that already exist.
-
-### 4. Configure GitHub OAuth
-
-In your GitHub OAuth App settings:
-- **Homepage URL:** `http://localhost:5173`
-- **Authorization callback URL:** `http://localhost:5000/api/auth/callback/github`
-
-### 5. Start the servers
-
-Open two terminals:
+### 4. Start the servers
 
 ```bash
-# Terminal 1 — backend (port 5000)
-npm run dev:backend
+# Terminal 1
+cd backend && npm run dev
 
-# Terminal 2 — frontend (port 5173)
-npm run dev:frontend
+# Terminal 2
+cd frontend && npm run dev
 ```
 
-Then open **http://localhost:5173** in your browser.
+Open **http://localhost:5173** in your browser.
 
-## Project Structure
+## Provider Status (Verified 2026-10-29)
+
+| Provider | Model | Status | Notes |
+|----------|-------|--------|-------|
+| Groq | openai/gpt-oss-120b | ✅ **Working** | Free tier, fast |
+| Groq | openai/gpt-oss-20b | ✅ **Working** | Free tier, fastest |
+| OpenAI | gpt-4o-mini | ⚠️ Key valid | Requires account credits |
+| Anthropic | claude-haiku-5-5 | ⚠️ Key valid | Requires account credits |
+| DeepSeek | deepseek-flash | ⚠️ Key valid | Requires account balance |
+| Google Gemini | gemini-3.8-flash | 🔑 Needs valid key | Must use AI Studio key (AIza...) |
+| xAI Grok | grok-4.7 | ❌ No key | Add XAI_API_KEY |
+
+## Architecture
 
 ```
 OBytGemini/
 ├── backend/
 │   ├── src/
-│   │   ├── db/           # Drizzle schema and migrations
-│   │   ├── lib/          # Auth config, model registry
-│   │   ├── middleware/   # requireAuth
-│   │   ├── routes/       # /api/chats, /api/models
-│   │   └── index.ts      # Express entry point
-│   ├── .env.example
-│   └── drizzle.config.ts
+│   │   ├── db/           # Drizzle schema (Better Auth + chat/message tables)
+│   │   ├── lib/          # Better Auth config, model registry + AI adapters
+│   │   ├── middleware/   # requireAuth (session verification)
+│   │   ├── routes/       # /api/chats (SSE streaming), /api/models, /api/images
+│   │   └── index.ts      # Express entry — CORS, rate limiting, health, config
+│   └── .env.example
 └── frontend/
     └── src/
-        ├── components/   # Sidebar, MessageBubble, PromptComposer, etc.
+        ├── components/   # AppShell, Sidebar, MessageBubble (markdown+highlight), PromptComposer, ModelSelector, WelcomeScreen
         ├── hooks/        # useAuth
-        ├── lib/          # api.ts, auth-client.ts
+        ├── lib/          # api.ts (SSE client), auth-client.ts
         ├── pages/        # ChatPage, SignInPage
         └── types/        # Shared TypeScript interfaces
 ```
 
-## API Endpoints
+## Key API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/models` | List configured AI models |
-| GET | `/api/chats` | List your chats |
-| POST | `/api/chats` | Create a chat |
-| GET | `/api/chats/:id` | Load chat + messages |
-| PATCH | `/api/chats/:id` | Update title / model |
-| DELETE | `/api/chats/:id` | Delete a chat |
-| POST | `/api/chats/:id/messages` | Send a message (streams SSE) |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/health` | No | Health check |
+| GET | `/api/config` | No | Available auth providers |
+| GET | `/api/models` | No | Available AI models |
+| GET | `/api/chats` | Yes | List user's chats |
+| POST | `/api/chats` | Yes | Create a chat |
+| GET | `/api/chats/:id` | Yes | Load chat + messages |
+| PATCH | `/api/chats/:id` | Yes | Update title/model |
+| DELETE | `/api/chats/:id` | Yes | Delete a chat |
+| POST | `/api/chats/:id/messages` | Yes | Send message (SSE stream) |
+| POST | `/api/images` | Yes | Generate image (Google/OpenAI) |
 
-## Adding Providers
+## Security
 
-Each AI provider key is optional — missing keys simply show the model as unavailable in the selector. To add a new key:
-
-1. Add it to `backend/.env`
-2. The model registry in `backend/src/lib/models.ts` will automatically mark it as available on next restart
-
-## Security Notes
-
-- API keys, OAuth secrets, and DB credentials live only in `backend/.env` — never in frontend code
+- All API keys live only in `backend/.env` — never in frontend code
 - `.env` is gitignored
-- All chat operations verify ownership server-side
-- Rate limiting is applied to AI generation endpoints (20 req/min)
-- Rotate any provider, OAuth, or database credentials that have been pasted into shared notes or chat.
+- Chat ownership enforced server-side on every request
+- Rate limiting on AI endpoints (20 req/min)
+- Sessions via HttpOnly cookies (Lax SameSite)
 
 ## Troubleshooting
 
-**`password authentication failed`** — Your Neon password was rotated. Get a fresh connection string from the Neon console.
+**Backend hangs for 20s on startup** — tsx takes time to compile TypeScript. Wait ~20s.
 
-**`channel_binding=require` errors** — Remove that parameter from `DATABASE_URL`. The serverless driver doesn't support it.
+**Gemini returns "invalid key" error** — The key must start with `AIza`. Get one from [AI Studio](https://aistudio.google.com/app/apikey). Keys starting with `AQ.` are OAuth tokens and will not work.
 
-**`Better Auth schema mismatch`** — Run `npm run db:push` to apply the latest schema.
+**Neon connection timeout** — The free tier pauses when idle. The pool has a 30s connection timeout to handle cold starts.
 
-**Backend won't start / DATABASE_URL missing** — Make sure you're running `npm run dev` from the `backend/` directory where `.env` is located.
+**GitHub OAuth redirects to error page** — Verify the callback URL in your GitHub OAuth App settings is exactly: `http://localhost:5000/api/auth/callback/github`

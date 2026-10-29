@@ -23,6 +23,8 @@ export interface Message {
   content: string;
   provider?: string | null;
   model?: string | null;
+  imageDataUrl?: string | null;
+  mimeType?: string | null;
   createdAt: string;
 }
 

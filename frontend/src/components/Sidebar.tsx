@@ -118,12 +118,11 @@ export default function Sidebar({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-xs font-bold">O</span>
-            </div>
-            <span className="font-semibold text-gray-900 text-sm">OBytGemini</span>
-          </div>
+          <img
+            src="/images/obytgemini-logo-alt.png"
+            alt="OBytGemini"
+            className="h-10 w-48 object-contain object-left"
+          />
           <button
             onClick={onToggle}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"

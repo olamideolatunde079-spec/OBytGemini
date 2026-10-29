@@ -10,7 +10,7 @@ if (!process.env.DATABASE_URL) {
 // Neon free tier can pause (cold start). We raise timeouts to handle wake-up.
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: true },
+  ssl: { rejectUnauthorized: false },
   max: 5,
   idleTimeoutMillis: 60_000,
   connectionTimeoutMillis: 30_000, // Neon cold start can take ~10-15 s

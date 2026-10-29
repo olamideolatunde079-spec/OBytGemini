@@ -14,6 +14,10 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   socialProviders.github = {
     clientId: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    mapProfileToUser: (profile) => ({
+      name: profile.name || profile.login || "GitHub User",
+      email: profile.email || `github-${profile.id}@users.noreply.github.com`,
+    }),
   };
   console.log("✅ GitHub OAuth configured");
 } else {
@@ -43,10 +47,14 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:5000",
   secret: authSecret,
 
-  // Allow requests from the frontend origin
-  trustedOrigins: [process.env.FRONTEND_URL ?? "http://localhost:5173"],
+  trustedOrigins: [
+    process.env.FRONTEND_URL ?? "http://localhost:5173",
+    "http://localhost:5173",
+    "http://localhost:5175",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5175",
+  ],
 
-  // Email + password — enabled, no email verification required for dev
   emailAndPassword: {
     enabled: true,
     disableSignUp: false,
@@ -55,7 +63,6 @@ export const auth = betterAuth({
     maxPasswordLength: 128,
   },
 
-  // Social providers (GitHub now, Google when configured)
   socialProviders,
   advanced: {
     useSecureCookies: process.env.NODE_ENV === "production",

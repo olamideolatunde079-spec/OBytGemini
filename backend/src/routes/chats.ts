@@ -3,7 +3,11 @@ import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { getAvailableModels, getModel } from "../lib/models.js";
+import {
+  getAvailableModels,
+  getModel,
+  getProviderFailureMessage,
+} from "../lib/models.js";
 import { streamText } from "ai";
 
 const router = Router();
@@ -221,6 +225,7 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   };
 
   let generationFinished = false;
+  let streamError: unknown;
   try {
     const { textStream } = streamText({
       model: aiModel,
@@ -230,6 +235,22 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
         AbortSignal.timeout(90_000),
       ]),
       maxRetries: 0,
+      onError: ({ error }) => {
+        streamError = error;
+        const statusCode =
+          typeof error === "object" &&
+          error !== null &&
+          "statusCode" in error &&
+          typeof error.statusCode === "number"
+            ? error.statusCode
+            : undefined;
+        console.error("AI provider stream failed", {
+          provider,
+          model: modelId,
+          statusCode,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+        });
+      },
     });
 
     let fullText = "";
@@ -240,6 +261,11 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
     }
 
     if (abortController.signal.aborted || res.destroyed) return;
+    if (streamError) {
+      sendEvent({ error: getProviderFailureMessage(streamError, provider) });
+      res.end();
+      return;
+    }
     generationFinished = true;
     if (!fullText.trim()) {
       sendEvent({ error: "The selected provider returned an empty response. Please try again." });

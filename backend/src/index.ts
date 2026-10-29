@@ -5,6 +5,7 @@ import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import modelsRouter from "./routes/models.js";
 import chatsRouter from "./routes/chats.js";
+import imagesRouter from "./routes/images.js";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 5000);
@@ -49,6 +50,7 @@ app.get("/api/config", (_req, res) => {
 
 // Routes
 app.use("/api/models", modelsRouter);
+app.use("/api/images", aiLimiter, imagesRouter);
 app.use("/api/chats", aiLimiter, chatsRouter);
 
 // Centralized error handler

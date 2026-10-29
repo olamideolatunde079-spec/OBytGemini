@@ -11,7 +11,12 @@ export default function App() {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 animate-pulse" />
+          <img
+            src="/images/obytgemini-logo.png"
+            alt=""
+            aria-hidden="true"
+            className="w-12 h-12 object-contain animate-pulse"
+          />
           <p className="text-sm text-gray-500">Loading OBytGemini…</p>
         </div>
       </div>
