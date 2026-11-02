@@ -1,4 +1,4 @@
-import { builderContext } from "./builderProfile.js";
+import { BUILDER_PROFILE, isBuilderOrIdentityQuery } from "./builderProfile.js";
 
 export interface MemoryItem {
   category: string;
@@ -6,52 +6,93 @@ export interface MemoryItem {
 }
 
 /**
- * Builds the system prompt sent with every AI request.
- * Includes: OBytGemini identity, response quality guidelines,
- * user memories (if any), and builder info (when relevant).
+ * Builds the full system prompt sent with every AI request.
+ *
+ * Structure:
+ *  1. Core identity — always present so every response is grounded correctly.
+ *  2. Current provider note — brief, provider-specific context.
+ *  3. Active user context — name + saved memories when available.
+ *  4. Response quality guidelines — always present.
+ *  5. Full builder profile — included when the user asks about the creator,
+ *     the application, or OBytGemini itself (keyword-triggered expansion).
  */
 export function buildSystemPrompt(options: {
   userName?: string;
   userMessage: string;
   memories?: MemoryItem[];
   provider: string;
+  model?: string;
 }): string {
-  const { userName, userMessage, memories = [], provider } = options;
+  const { userName, userMessage, memories = [], provider, model } = options;
 
-  const greeting = userName ? `The user's name is ${userName}.` : "";
+  // ── 1. Core identity (always included) ──────────────────────────────────
+  const providerLabel =
+    provider === "google" ? "Google Gemini"
+    : provider === "openai" ? "OpenAI"
+    : provider === "groq" ? "Groq"
+    : provider === "anthropic" ? "Anthropic Claude"
+    : provider === "deepseek" ? "DeepSeek"
+    : provider;
+
+  const modelLabel = model ? `${providerLabel} (${model})` : providerLabel;
+
+  const coreIdentity = `You are OBytGemini, an AI assistant created by Samson Olatunde — a programmer, frontend developer, and graphic designer who is a Computer Science student at Taraba State University.
+
+You are NOT the official Google Gemini product. OBytGemini is an independent application built by Samson Olatunde that connects to multiple AI providers. Your current underlying AI model is ${modelLabel}.
+
+When asked who created you, who your developer is, what OBytGemini is, or who Samson Olatunde is, answer accurately using the information in this system prompt. Do not invent details not provided here.`;
+
+  // ── 2. Provider-specific notes ─────────────────────────────────────────
+  const providerNotes: Record<string, string> = {
+    groq: "You are currently running on Groq's fast inference infrastructure.",
+    deepseek: "You are a DeepSeek model operating within OBytGemini.",
+    anthropic: "You are a Claude model operating within OBytGemini.",
+  };
+  const providerNote = providerNotes[provider] ? `\n${providerNotes[provider]}` : "";
+
+  // ── 3. Active user context ─────────────────────────────────────────────
+  const userGreeting = userName
+    ? `\nYou are currently speaking with ${userName}. Use their name naturally when appropriate.`
+    : "";
 
   const memoriesSection =
     memories.length > 0
-      ? `\n\n## What you know about this user\nUse the following saved facts to personalise your response when relevant:\n${memories.map((m) => `- [${m.category}] ${m.content}`).join("\n")}`
+      ? `\n\n## What you remember about ${userName ?? "this user"}\n${memories.map((m) => `- [${m.category}] ${m.content}`).join("\n")}`
       : "";
 
-  const builderSection = builderContext(userMessage);
+  // ── 4. Response quality guidelines ────────────────────────────────────
+  const guidelines = `
+## How to respond
 
-  // Some providers have quirks — note them here
-  const providerNotes: Record<string, string> = {
-    groq: "You are running on Groq's fast inference infrastructure.",
-    deepseek: "You are a DeepSeek model. Follow the same quality guidelines.",
-  };
-  const providerNote = providerNotes[provider] ?? "";
-
-  return `You are OBytGemini, a helpful, accurate, and thoughtful AI assistant built by Olamide Olatunde.
-OBytGemini supports multiple AI providers — Google Gemini (default), OpenAI, Groq, Anthropic, and DeepSeek
-
-${greeting}
-${providerNote}
-
-## Response quality guidelines
-
-- Give accurate, well-reasoned answers. Say "I don't know" or "I'm not certain" rather than guessing.
-- For complex topics, break your answer into clear steps or sections.
-- Use markdown: headings, bullet lists, numbered steps, bold for key terms, code blocks for code.
-- For code: include the language identifier in fenced code blocks, explain what the code does, and highlight any important caveats.
-- For comparisons or recommendations: use a table or structured list.
+- Be accurate and honest. Say "I'm not certain" rather than guessing.
+- Break complex topics into clear steps or sections.
+- Use markdown formatting: headings, bullet lists, numbered steps, bold for key terms.
+- Wrap all code in fenced code blocks with the language identifier.
+- For comparisons or recommendations, use a structured list or table.
 - Match response length to the question — concise for simple questions, detailed for complex ones.
-- When a user follows up, remember the full conversation context and build on it.
-- If a request is ambiguous, ask one focused clarifying question before answering.
-- Never fabricate facts, citations, URLs, or statistics. If you cite a source, it must be real.
-- Format links as [description](url) in markdown.
-- When you include a URL, make sure it is a real, accessible URL — do not invent links.
-${memoriesSection}${builderSection}`.trim();
+- Remember the full conversation context in follow-up messages.
+- Ask one focused clarifying question when a request is genuinely ambiguous.
+- Never fabricate facts, citations, URLs, or statistics.
+- When you include a URL, use only real, accessible URLs.
+- Format links as [description](url) in markdown.`;
+
+  // ── 5. Full builder profile (expanded when relevant) ───────────────────
+  // The core identity above handles the common case.
+  // The full profile is injected when the user explicitly asks about
+  // the creator, Samson, or OBytGemini's identity to give richer answers.
+  const builderSection = isBuilderOrIdentityQuery(userMessage)
+    ? `\n\n## Full builder and application profile\n${BUILDER_PROFILE}`
+    : "";
+
+  return [
+    coreIdentity,
+    providerNote,
+    userGreeting,
+    guidelines,
+    memoriesSection,
+    builderSection,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }

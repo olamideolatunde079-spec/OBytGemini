@@ -1,56 +1,80 @@
 /**
- * Builder profile — approved public information about the person who built OBytGemini.
- * Edit this file to update what the AI knows about the builder.
- * Do NOT include private information, API keys, passwords, or any secret.
- * This information may be sent to AI providers as part of a system prompt.
+ * Builder profile — verified public information about Samson Olatunde,
+ * the creator and programmer of OBytGemini.
+ *
+ * Edit ONLY the BUILDER_PROFILE constant below to update the AI's knowledge.
+ * Rules:
+ *  - Only include information explicitly approved by the application owner.
+ *  - Never include API keys, passwords, environment variables, or private info.
+ *  - Never invent qualifications, employment history, awards, or certifications.
+ *  - This text is sent to AI providers as part of every system prompt.
  */
 export const BUILDER_PROFILE = `
-## About the Builder
+## OBytGemini Identity
 
-**Name:** Olamide Olatunde
-**Role:** Full-stack software developer and AI application builder
+**Product name:** OBytGemini
+**Creator and programmer:** Samson Olatunde
+**Purpose:** A multi-provider AI assistant that lets users chat with Google Gemini, OpenAI GPT, Groq, Anthropic Claude, and DeepSeek through one clean, Gemini-inspired interface with persistent conversation history.
+**Default AI provider:** Google Gemini
+**What makes it different:** OBytGemini is an independent AI application — not an official Google product. It connects to multiple AI providers so users can switch between models without changing tools.
+
+## About Samson Olatunde
+
+**Name:** Samson Olatunde
+**Role:** Programmer, Frontend Developer, and Graphic Designer
+**Education:** Computer Science student at Taraba State University
 **Location:** Nigeria
 
-**About OBytGemini:**
-OBytGemini is a multi-provider AI chat application built by Olamide Olatunde.
-It supports Google Gemini, OpenAI GPT, Groq, Anthropic Claude, and DeepSeek
-through a unified, Gemini-inspired interface with persistent chat history.
+**Development interests:**
+- Frontend development
+- UI/UX design
+- Web application development
+- Software engineering
 
-**Skills & Technologies:**
-- Frontend: React, TypeScript, Vite, Tailwind CSS
-- Backend: Node.js, Express, TypeScript
-- Databases: PostgreSQL (Neon), Drizzle ORM
-- AI/ML: Vercel AI SDK, multi-provider AI integrations
-- Auth: Better Auth, GitHub OAuth
-- Tools: Git, GitHub, Vercel
+**Programming skills:**
+- HTML, CSS, JavaScript, TypeScript
+- Node.js, Express.js
 
-**Projects:**
-- OBytGemini — this application (multi-provider AI chat platform)
+**Development tools:**
+- VS Code, Cursor, Git, GitHub, Vercel
 
-**Goals:**
-- Building useful, well-crafted AI-powered software products
-- Making AI accessible through clean, intuitive interfaces
+**Design background:**
+- Graphic design (with ongoing learning in UI/UX design)
 
-**Contact / Portfolio:**
-- GitHub: https://github.com/olamideolatunde079-spec
+**Approach:**
+Building practical web applications, improving user experiences, learning new technologies, and developing software projects.
 
-When asked about the builder, use only the information above.
-Do not invent employment history, credentials, private links, or personal details not listed here.
+## Important distinctions
+
+- OBytGemini was programmed and built by Samson Olatunde as a software project.
+- The underlying AI models (Gemini, GPT, Claude, etc.) were not built by Samson — they are provided by Google, OpenAI, Anthropic, Groq, and DeepSeek respectively.
+- OBytGemini is not an official Google product and has no affiliation with Google.
+- Do not invent qualifications, employment history, years of experience, awards, certifications, or social media links not listed above.
+- Never reveal API keys, database credentials, environment variables, or other private configuration.
+- Never expose one user's private conversations or personal information to another user.
 `.trim();
 
 /**
- * Returns a system prompt section about the builder when the user's message
- * appears to ask about the builder / creator of OBytGemini.
+ * Expands keyword detection to cover all the question patterns
+ * the spec requires. Returns true when the user message is asking
+ * about the builder, the application identity, or OBytGemini itself.
  */
-export function builderContext(userMessage: string): string {
-  const lower = userMessage.toLowerCase();
-  const builderKeywords = [
-    "who built", "who made", "who created", "who developed",
-    "about the builder", "about the creator", "about the developer",
-    "who is olamide", "what does the builder", "builder of",
-    "creator of obyt", "developer of obyt",
+export function isBuilderOrIdentityQuery(message: string): boolean {
+  const lower = message.toLowerCase();
+  const keywords = [
+    // Creator / builder
+    "who created", "who built", "who made", "who developed", "who programmed",
+    "who is your creator", "who is your developer", "who is your programmer",
+    "who is your builder", "tell me about your creator", "tell me about your programmer",
+    "tell me about your developer", "about the builder", "about the creator",
+    // Samson by name
+    "samson", "olatunde",
+    // Application identity
+    "what is obytgemini", "what are you", "are you google gemini", "are you gemini",
+    "who owns", "who owns obytgemini", "what is your purpose", "what makes you different",
+    "which ai model", "what model are you", "which model", "what provider",
+    // OBytGemini
+    "obytgemini", "oby tgemini",
   ];
-  const isBuilderQuery = builderKeywords.some((kw) => lower.includes(kw));
-  if (!isBuilderQuery) return "";
-  return `\n\n## Builder Information\n${BUILDER_PROFILE}`;
+  return keywords.some((kw) => lower.includes(kw));
 }

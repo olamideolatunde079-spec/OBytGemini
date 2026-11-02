@@ -233,6 +233,7 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
     userMessage: parsed.data.content,
     memories,
     provider,
+    model: modelId,
   });
 
   // Build message history — handle vision attachment on the latest user turn
