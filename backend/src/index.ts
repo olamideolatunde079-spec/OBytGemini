@@ -53,7 +53,7 @@ app.get("/api/config", (_req, res) => {
     features: {
       research: isResearchConfigured(),
       imageGeneration: Boolean(
-        process.env.GEMINI_API_KEY?.trim()?.startsWith("AIza") ||
+        (process.env.GEMINI_API_KEY?.trim()?.length ?? 0) > 10 ||
           process.env.OPENAI_API_KEY?.trim()
       ),
     },

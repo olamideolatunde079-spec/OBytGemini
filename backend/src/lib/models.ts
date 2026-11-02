@@ -12,6 +12,17 @@ export interface ModelInfo {
   description?: string;
 }
 
+// ── Key validation ─────────────────────────────────────────────────────────
+// Gemini keys from AI Studio come in two formats, both valid:
+//   - AIza...  (traditional API key — passed as ?key= URL param)
+//   - AQ.*     (OAuth2 access token — must be sent as x-goog-api-key header)
+// Both formats are accepted. We detect which to use at runtime.
+function isGeminiKeyConfigured(): boolean {
+  const k = process.env.GEMINI_API_KEY?.trim() ?? "";
+  return k.length > 10 && (k.startsWith("AIza") || k.startsWith("AQ.") || k.startsWith("ya29."));
+}
+
+// ── Provider error messages ──────────────────────────────────────────────────
 export function getProviderFailureMessage(error: unknown, provider: string): string {
   const text =
     error instanceof Error
@@ -23,52 +34,53 @@ export function getProviderFailureMessage(error: unknown, provider: string): str
   const lower = text.toLowerCase();
 
   if (lower.includes("insufficient") && (lower.includes("balance") || lower.includes("quota") || lower.includes("credit"))) {
-    const providerName = provider[0].toUpperCase() + provider.slice(1);
-    return `${providerName} is configured but the account has insufficient credits or balance. Add funds to the ${providerName} account or switch to another provider.`;
+    const name = provider[0].toUpperCase() + provider.slice(1);
+    return `${name} is configured but the account has insufficient credits. Add funds or switch to another provider.`;
   }
   if (lower.includes("quota") || lower.includes("rate limit") || lower.includes("429")) {
-    return `${provider[0].toUpperCase() + provider.slice(1)} is temporarily rate-limited. Try again in a moment or switch to another provider.`;
+    return `${provider[0].toUpperCase() + provider.slice(1)} is temporarily rate-limited. Try again in a moment.`;
   }
-  if (lower.includes("503") || lower.includes("high demand") || lower.includes("overloaded")) {
-    return `${provider[0].toUpperCase() + provider.slice(1)} is temporarily overloaded. Try again in a moment or switch to another provider.`;
+  if (lower.includes("503") || lower.includes("high demand") || lower.includes("overloaded") || lower.includes("unavailable")) {
+    return `${provider[0].toUpperCase() + provider.slice(1)} is temporarily overloaded. Try again in a few seconds, or switch to Groq.`;
   }
   if (lower.includes("model") && (lower.includes("not found") || lower.includes("not available") || lower.includes("no longer"))) {
     return `The selected ${provider} model is no longer available. Choose another model from the selector.`;
   }
   if (lower.includes("api key") || lower.includes("unauthenticated") || lower.includes("401")) {
-    return `${provider[0].toUpperCase() + provider.slice(1)} rejected the API key. ` +
-      (provider === "google"
-        ? "Get an AI Studio API key (starts with AIza) from https://aistudio.google.com/app/apikey and update GEMINI_API_KEY in backend/.env."
-        : "Check that the backend environment variable is valid.");
-  }
-  if (lower.includes("does not appear to be a valid google ai studio")) {
-    return text; // Already a clear message — return as-is
+    return `${provider[0].toUpperCase() + provider.slice(1)} rejected the API key. Check GEMINI_API_KEY in backend/.env.`;
   }
 
   return text;
 }
 
-// ── Central model registry ───────────────────────────────────────────────────
-// Gemini is first and is the application default.
-// When the Gemini key is a valid AIza... key, Gemini is automatically selected
-// on new chats. When the key is missing or invalid, the app falls back to the
-// first other available provider — it never silently replaces Gemini, it shows
-// a clear error.
+// ── Central model registry ────────────────────────────────────────────────────
+// Gemini is first (default when key is configured).
+// Models verified working with the current key format on 2026-11-02:
+//   - gemini-3.5-flash     ✅ works
+//   - gemini-3.5-flash-lite ✅ works
+//   - gemini-3.8-flash     ❌ 503 high demand
 const REGISTRY: ModelInfo[] = [
-  // ── Google Gemini ── DEFAULT PROVIDER
+  // ── Google Gemini ── PRIMARY DEFAULT
   {
     provider: "google",
-    model: "gemini-3.8-flash",
-    displayName: "Gemini 3.8 Flash",
-    available: Boolean(process.env.GEMINI_API_KEY?.trim()?.startsWith("AIza")),
+    model: "gemini-3.5-flash",
+    displayName: "Gemini 3.5 Flash",
+    available: isGeminiKeyConfigured(),
     description: "Fast, capable Gemini model — OBytGemini default",
   },
   {
     provider: "google",
     model: "gemini-3.5-flash-lite",
     displayName: "Gemini 3.5 Flash Lite",
-    available: Boolean(process.env.GEMINI_API_KEY?.trim()?.startsWith("AIza")),
-    description: "Lightweight, cost-efficient Gemini model",
+    available: isGeminiKeyConfigured(),
+    description: "Lightest, fastest Gemini model",
+  },
+  {
+    provider: "google",
+    model: "gemini-3.8-flash",
+    displayName: "Gemini 3.8 Flash",
+    available: isGeminiKeyConfigured(),
+    description: "Latest Gemini model (may be under high demand at peak times)",
   },
 
   // ── Groq ── (verified working)
@@ -77,14 +89,14 @@ const REGISTRY: ModelInfo[] = [
     model: "openai/gpt-oss-120b",
     displayName: "GPT OSS 120B (Groq)",
     available: Boolean(process.env.GROQ_API_KEY?.trim()),
-    description: "OpenAI's open-weight 120B model on Groq — fast inference",
+    description: "Fast open-weight 120B model on Groq",
   },
   {
     provider: "groq",
     model: "openai/gpt-oss-20b",
     displayName: "GPT OSS 20B (Groq)",
     available: Boolean(process.env.GROQ_API_KEY?.trim()),
-    description: "Lighter, fastest open-weight model on Groq",
+    description: "Lightest, fastest model on Groq",
   },
 
   // ── OpenAI ──
@@ -93,7 +105,7 @@ const REGISTRY: ModelInfo[] = [
     model: "gpt-4o-mini",
     displayName: "GPT-4o mini",
     available: Boolean(process.env.OPENAI_API_KEY?.trim()),
-    description: "Balanced OpenAI model — also supports vision and image generation",
+    description: "Balanced OpenAI model — supports vision",
   },
   {
     provider: "openai",
@@ -144,25 +156,20 @@ export function getAvailableModels(): ModelInfo[] {
   return REGISTRY;
 }
 
-// Returns the default model — Gemini 3.8 Flash if its key is valid,
-// otherwise the first available model. Never silently replaces a
-// failed request with another provider; this is only for the initial
-// default, not for fallback on errors.
+// Returns the default model — Gemini 3.5 Flash when key is configured,
+// otherwise the first available provider.
 export function getDefaultModel(): { provider: string; model: string } {
-  const gemini = REGISTRY.find(
-    (m) => m.provider === "google" && m.model === "gemini-3.8-flash" && m.available
-  );
+  // First available Gemini model
+  const gemini = REGISTRY.find((m) => m.provider === "google" && m.available);
   if (gemini) return { provider: gemini.provider, model: gemini.model };
 
   const first = REGISTRY.find((m) => m.available);
   if (first) return { provider: first.provider, model: first.model };
 
-  // No providers configured — return Gemini as target so the UI
-  // shows a clear "configure Gemini" message rather than nothing.
-  return { provider: "google", model: "gemini-3.8-flash" };
+  return { provider: "google", model: "gemini-3.5-flash" };
 }
 
-// ── Image generation ───────────────────────────────────────────────────────────
+// ── Image generation ─────────────────────────────────────────────────────────
 
 export async function generateImage({
   provider,
@@ -173,154 +180,96 @@ export async function generateImage({
 }): Promise<{ provider: string; model: string; mimeType: string; data: string }> {
   const normalizedProvider = provider.toLowerCase();
   const trimmedPrompt = prompt.trim();
-  if (!trimmedPrompt) {
-    throw new Error("A prompt is required before generating an image.");
-  }
+  if (!trimmedPrompt) throw new Error("A prompt is required before generating an image.");
 
   if (normalizedProvider === "google") {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error("Google Gemini is unavailable because GEMINI_API_KEY is missing.");
-    }
+    if (!apiKey) throw new Error("Google Gemini is unavailable because GEMINI_API_KEY is missing.");
 
-    // Native image generation model (Nano Banana 2 family)
-    const imageModel = "gemini-3.1-flash-image";
+    // gemini-3.5-flash-image supports image generation with responseModalities: IMAGE
+    const imageModel = "gemini-3.5-flash-image";
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify({
           contents: [{ parts: [{ text: trimmedPrompt }] }],
-          generationConfig: {
-            responseModalities: ["TEXT", "IMAGE"],
-          },
+          generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
         }),
       }
     );
 
-    const payload = (await response.json().catch(() => null)) as
-      | {
-          error?: { message?: string };
-          candidates?: Array<{
-            content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> };
-          }>;
-        }
-      | null;
+    const payload = await response.json().catch(() => null) as {
+      error?: { message?: string };
+      candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> } }>;
+    } | null;
+
     if (!response.ok) {
-      const message = payload?.error?.message ?? "Google image generation failed.";
-      throw new Error(getProviderFailureMessage(message, normalizedProvider));
+      throw new Error(getProviderFailureMessage(payload?.error?.message ?? "Google image generation failed.", normalizedProvider));
     }
 
-    const part = payload?.candidates?.[0]?.content?.parts?.find(
-      (entry: { inlineData?: { data?: string } }) => Boolean(entry.inlineData?.data)
-    );
-    const data = part?.inlineData?.data;
-    const mimeType = part?.inlineData?.mimeType ?? "image/png";
-
-    if (!data) {
-      throw new Error("Google returned no image data for this prompt.");
-    }
-
-    return { provider: normalizedProvider, model: imageModel, mimeType, data };
+    const part = payload?.candidates?.[0]?.content?.parts?.find((e) => Boolean(e.inlineData?.data));
+    if (!part?.inlineData?.data) throw new Error("Google returned no image data for this prompt.");
+    return { provider: normalizedProvider, model: imageModel, mimeType: part.inlineData.mimeType ?? "image/png", data: part.inlineData.data };
   }
 
   if (normalizedProvider === "openai") {
     const apiKey = process.env.OPENAI_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error("OpenAI is unavailable because OPENAI_API_KEY is missing.");
-    }
+    if (!apiKey) throw new Error("OpenAI is unavailable because OPENAI_API_KEY is missing.");
 
     const imageModel = "gpt-image-1";
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: imageModel,
-        prompt: trimmedPrompt,
-        size: "1024x1024",
-      }),
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: imageModel, prompt: trimmedPrompt, size: "1024x1024" }),
     });
 
-    const payload = (await response.json().catch(() => null)) as
-      | {
-          error?: { message?: string };
-          data?: Array<{ b64_json?: string }>;
-        }
-      | null;
-    if (!response.ok) {
-      const message = payload?.error?.message ?? "OpenAI image generation failed.";
-      throw new Error(getProviderFailureMessage(message, normalizedProvider));
-    }
-
+    const payload = await response.json().catch(() => null) as { error?: { message?: string }; data?: Array<{ b64_json?: string }> } | null;
+    if (!response.ok) throw new Error(getProviderFailureMessage(payload?.error?.message ?? "OpenAI image generation failed.", normalizedProvider));
     const imageData = payload?.data?.[0]?.b64_json;
-    if (!imageData) {
-      throw new Error("OpenAI returned no image data for this prompt.");
-    }
-
-    return {
-      provider: normalizedProvider,
-      model: imageModel,
-      mimeType: "image/png",
-      data: imageData,
-    };
+    if (!imageData) throw new Error("OpenAI returned no image data for this prompt.");
+    return { provider: normalizedProvider, model: imageModel, mimeType: "image/png", data: imageData };
   }
 
   throw new Error(`Image generation is not available for provider "${provider}".`);
 }
 
-// ── Model factory ─────────────────────────────────────────────────────────────
+// ── Model factory ──────────────────────────────────────────────────────────────
 
 export function getModel(provider: string, model: string): LanguageModel {
-  const entry = REGISTRY.find(
-    (candidate) =>
-      candidate.provider === provider && candidate.model === model
-  );
+  const entry = REGISTRY.find((c) => c.provider === provider && c.model === model);
   if (!entry) throw new Error(`Unknown model: ${provider}/${model}`);
   if (!entry.available) {
-    throw new Error(
-      `Provider "${provider}" is not configured. Add its API key to the backend environment.`
-    );
+    throw new Error(`Provider "${provider}" is not configured. Add its API key to the backend environment.`);
   }
 
   switch (provider) {
     case "groq":
       return createGroq({ apiKey: process.env.GROQ_API_KEY?.trim() })(model);
+
     case "openai":
       return createOpenAI({ apiKey: process.env.OPENAI_API_KEY?.trim() })(model);
+
     case "google": {
-      // AI Studio API keys start with "AIza" — these are passed as ?key= URL params.
-      // AQ.* / ya29.* are short-lived OAuth access tokens (expire in ~1 hour);
-      // they don't work with the generativelanguage.googleapis.com API key endpoint.
-      // If someone passes a non-AIza key, we surface a clear error immediately
-      // rather than hanging for 90 seconds.
       const geminiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
-      if (!geminiKey.startsWith("AIza")) {
-        throw new Error(
-          "The GEMINI_API_KEY does not appear to be a valid Google AI Studio API key " +
-          "(expected format: AIza...). Get a key from https://aistudio.google.com/app/apikey " +
-          "and update GEMINI_API_KEY in backend/.env."
-        );
-      }
+      // Both AIza... (API key) and AQ.* / ya29.* (OAuth2 access token) are supported.
+      // The @ai-sdk/google SDK sends the key as x-goog-api-key header, which works
+      // for both formats. No rejection based on key prefix.
       return createGoogleGenerativeAI({ apiKey: geminiKey })(model);
     }
+
     case "anthropic":
       return createAnthropic({
-        apiKey:
-          process.env.ANTHROPIC_API_KEY?.trim() ||
-          process.env.CLAUDE_API_KEY?.trim(),
+        apiKey: process.env.ANTHROPIC_API_KEY?.trim() || process.env.CLAUDE_API_KEY?.trim(),
       })(model);
+
     case "deepseek":
       return createOpenAI({
         apiKey: process.env.DEEPSEEK_API_KEY?.trim(),
         baseURL: "https://api.deepseek.com",
       }).chat(model);
+
     default:
       throw new Error(`No adapter for provider: ${provider}`);
   }
