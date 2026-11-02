@@ -138,15 +138,6 @@ const REGISTRY: ModelInfo[] = [
     available: Boolean(process.env.DEEPSEEK_API_KEY?.trim()),
     description: "DeepSeek's standard chat model",
   },
-
-  // ── xAI Grok ──
-  {
-    provider: "xai",
-    model: "grok-4.7",
-    displayName: "Grok 4.7",
-    available: Boolean(process.env.XAI_API_KEY?.trim()),
-    description: "xAI model via OpenAI-compatible API",
-  },
 ];
 
 export function getAvailableModels(): ModelInfo[] {
@@ -330,11 +321,6 @@ export function getModel(provider: string, model: string): LanguageModel {
         apiKey: process.env.DEEPSEEK_API_KEY?.trim(),
         baseURL: "https://api.deepseek.com",
       }).chat(model);
-    case "xai":
-      return createOpenAI({
-        apiKey: process.env.XAI_API_KEY?.trim(),
-        baseURL: "https://api.x.ai/v1",
-      })(model);
     default:
       throw new Error(`No adapter for provider: ${provider}`);
   }

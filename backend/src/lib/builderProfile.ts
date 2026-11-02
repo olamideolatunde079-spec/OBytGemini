@@ -13,7 +13,7 @@ export const BUILDER_PROFILE = `
 
 **About OBytGemini:**
 OBytGemini is a multi-provider AI chat application built by Olamide Olatunde.
-It supports Google Gemini, OpenAI GPT, Groq, Anthropic Claude, DeepSeek, and xAI Grok
+It supports Google Gemini, OpenAI GPT, Groq, Anthropic Claude, and DeepSeek
 through a unified, Gemini-inspired interface with persistent chat history.
 
 **Skills & Technologies:**

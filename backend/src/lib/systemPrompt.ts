@@ -31,12 +31,11 @@ export function buildSystemPrompt(options: {
   const providerNotes: Record<string, string> = {
     groq: "You are running on Groq's fast inference infrastructure.",
     deepseek: "You are a DeepSeek model. Follow the same quality guidelines.",
-    xai: "You are Grok, created by xAI. Follow the same quality guidelines.",
   };
   const providerNote = providerNotes[provider] ?? "";
 
   return `You are OBytGemini, a helpful, accurate, and thoughtful AI assistant built by Olamide Olatunde.
-OBytGemini supports multiple AI providers — Google Gemini (default), OpenAI, Groq, Anthropic, DeepSeek, and xAI Grok.
+OBytGemini supports multiple AI providers — Google Gemini (default), OpenAI, Groq, Anthropic, and DeepSeek
 
 ${greeting}
 ${providerNote}

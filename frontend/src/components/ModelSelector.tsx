@@ -42,7 +42,6 @@ export default function ModelSelector({ models, provider, model, onChange, disab
     google: "Google",
     anthropic: "Anthropic",
     deepseek: "DeepSeek",
-    xai: "xAI",
   };
 
   return (
