@@ -142,7 +142,7 @@ export default function SignInPage() {
             <button
               onClick={handleGitHub}
               disabled={!!socialLoading || loading}
-              className="flex items-center justify-center gap-2.5 w-full py-2.5 px-4 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-medium text-sm transition-colors disabled:opacity-60"
+              className="flex items-center justify-center gap-2.5 w-full py-2.5 px-4 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-medium text-sm transition-colors disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
             >
               <FontAwesomeIcon icon={faGithub} className="w-4 h-4" />
               {socialLoading === "github" ? "Redirecting…" : "Continue with GitHub"}
@@ -152,7 +152,7 @@ export default function SignInPage() {
               <button
                 onClick={handleGoogle}
                 disabled={!!socialLoading || loading}
-                className="flex items-center justify-center gap-2.5 w-full py-2.5 px-4 rounded-xl border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium text-sm transition-colors disabled:opacity-60"
+                className="flex items-center justify-center gap-2.5 w-full py-2.5 px-4 rounded-xl border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium text-sm transition-colors disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
               >
                 <FontAwesomeIcon icon={faGoogle} className="w-4 h-4 text-red-500" />
                 {socialLoading === "google" ? "Redirecting…" : "Continue with Google"}
@@ -258,7 +258,7 @@ export default function SignInPage() {
             <button
               type="submit"
               disabled={loading || !!socialLoading}
-              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm transition-colors disabled:opacity-60"
+              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm transition-colors disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
@@ -279,7 +279,7 @@ export default function SignInPage() {
             {mode === "signin" ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
               onClick={toggleMode}
-              className="text-indigo-600 hover:text-indigo-700 font-medium"
+              className="text-indigo-600 hover:text-indigo-700 font-medium cursor-pointer"
             >
               {mode === "signin" ? "Sign up" : "Sign in"}
             </button>

@@ -49,21 +49,29 @@ export function getProviderFailureMessage(error: unknown, provider: string): str
 }
 
 // ── Central model registry ───────────────────────────────────────────────────
-// Model IDs verified against live provider APIs on 2026-10-29.
-// Only models confirmed valid are listed here. When a provider retires a
-// model, the API returns a "no longer available" error — getProviderFailureMessage
-// converts that to a friendly message.
+// Gemini is first and is the application default.
+// When the Gemini key is a valid AIza... key, Gemini is automatically selected
+// on new chats. When the key is missing or invalid, the app falls back to the
+// first other available provider — it never silently replaces Gemini, it shows
+// a clear error.
 const REGISTRY: ModelInfo[] = [
-  // ── Google Gemini ── (verified: gemini-3.8-flash is current per API response)
+  // ── Google Gemini ── DEFAULT PROVIDER
   {
     provider: "google",
     model: "gemini-3.8-flash",
     displayName: "Gemini 3.8 Flash",
-    available: Boolean(process.env.GEMINI_API_KEY?.trim()),
-    description: "Fast, general-purpose Gemini model",
+    available: Boolean(process.env.GEMINI_API_KEY?.trim()?.startsWith("AIza")),
+    description: "Fast, capable Gemini model — OBytGemini default",
+  },
+  {
+    provider: "google",
+    model: "gemini-3.5-flash-lite",
+    displayName: "Gemini 3.5 Flash Lite",
+    available: Boolean(process.env.GEMINI_API_KEY?.trim()?.startsWith("AIza")),
+    description: "Lightweight, cost-efficient Gemini model",
   },
 
-  // ── Groq ── (verified: openai/gpt-oss-120b returns real responses)
+  // ── Groq ── (verified working)
   {
     provider: "groq",
     model: "openai/gpt-oss-120b",
@@ -76,16 +84,16 @@ const REGISTRY: ModelInfo[] = [
     model: "openai/gpt-oss-20b",
     displayName: "GPT OSS 20B (Groq)",
     available: Boolean(process.env.GROQ_API_KEY?.trim()),
-    description: "Lighter, faster open-weight model on Groq",
+    description: "Lighter, fastest open-weight model on Groq",
   },
 
-  // ── OpenAI ── (verified: model ID valid, account has no credits)
+  // ── OpenAI ──
   {
     provider: "openai",
     model: "gpt-4o-mini",
     displayName: "GPT-4o mini",
     available: Boolean(process.env.OPENAI_API_KEY?.trim()),
-    description: "Balanced OpenAI model for everyday chat and coding",
+    description: "Balanced OpenAI model — also supports vision and image generation",
   },
   {
     provider: "openai",
@@ -95,7 +103,7 @@ const REGISTRY: ModelInfo[] = [
     description: "OpenAI flagship multimodal model",
   },
 
-  // ── Anthropic Claude ── (verified: model IDs valid, account has no credits)
+  // ── Anthropic Claude ──
   {
     provider: "anthropic",
     model: "claude-haiku-5-5",
@@ -115,7 +123,7 @@ const REGISTRY: ModelInfo[] = [
     description: "High-quality Claude model for complex reasoning",
   },
 
-  // ── DeepSeek ── (verified: model IDs valid, account has no balance)
+  // ── DeepSeek ──
   {
     provider: "deepseek",
     model: "deepseek-flash",
@@ -131,7 +139,7 @@ const REGISTRY: ModelInfo[] = [
     description: "DeepSeek's standard chat model",
   },
 
-  // ── xAI Grok ── (no key configured)
+  // ── xAI Grok ──
   {
     provider: "xai",
     model: "grok-4.7",
@@ -143,6 +151,24 @@ const REGISTRY: ModelInfo[] = [
 
 export function getAvailableModels(): ModelInfo[] {
   return REGISTRY;
+}
+
+// Returns the default model — Gemini 3.8 Flash if its key is valid,
+// otherwise the first available model. Never silently replaces a
+// failed request with another provider; this is only for the initial
+// default, not for fallback on errors.
+export function getDefaultModel(): { provider: string; model: string } {
+  const gemini = REGISTRY.find(
+    (m) => m.provider === "google" && m.model === "gemini-3.8-flash" && m.available
+  );
+  if (gemini) return { provider: gemini.provider, model: gemini.model };
+
+  const first = REGISTRY.find((m) => m.available);
+  if (first) return { provider: first.provider, model: first.model };
+
+  // No providers configured — return Gemini as target so the UI
+  // shows a clear "configure Gemini" message rather than nothing.
+  return { provider: "google", model: "gemini-3.8-flash" };
 }
 
 // ── Image generation ───────────────────────────────────────────────────────────
@@ -166,8 +192,8 @@ export async function generateImage({
       throw new Error("Google Gemini is unavailable because GEMINI_API_KEY is missing.");
     }
 
-    // Use the x-goog-api-key header (more reliable than URL parameter for this key format)
-    const imageModel = "gemini-3.8-flash";
+    // Native image generation model (Nano Banana 2 family)
+    const imageModel = "gemini-3.1-flash-image";
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent`,
       {

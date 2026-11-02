@@ -47,7 +47,7 @@ export default function WelcomeScreen({ onPrompt, userName }: Props) {
           <button
             key={label}
             onClick={() => onPrompt(prompt)}
-            className="flex flex-col items-start gap-2 p-4 bg-white border border-gray-200 rounded-2xl hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-left group"
+            className="flex flex-col items-start gap-2 p-4 bg-white border border-gray-200 rounded-2xl hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-left group cursor-pointer"
           >
             <div className="w-8 h-8 rounded-lg bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center transition-colors">
               <FontAwesomeIcon icon={icon} className="text-indigo-600 w-4 h-4" />

@@ -1,4 +1,12 @@
-import type { Chat, Message, ModelInfo } from "../types/index.js";
+import type {
+  Chat,
+  Message,
+  ModelInfo,
+  UserPreference,
+  Memory,
+  AppConfig,
+  ResearchResult,
+} from "../types/index.js";
 
 const BASE = "/api";
 
@@ -18,13 +26,18 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// Models
+// ── Config ────────────────────────────────────────────────────────────────────
+export async function fetchConfig(): Promise<AppConfig> {
+  return fetchJSON<AppConfig>(`${BASE}/config`);
+}
+
+// ── Models ────────────────────────────────────────────────────────────────────
 export async function fetchModels(): Promise<ModelInfo[]> {
   const data = await fetchJSON<{ models: ModelInfo[] }>(`${BASE}/models`);
   return data.models;
 }
 
-// Chats
+// ── Chats ─────────────────────────────────────────────────────────────────────
 export async function fetchChats(): Promise<Chat[]> {
   const data = await fetchJSON<{ chats: Chat[] }>(`${BASE}/chats`);
   return data.chats;
@@ -65,30 +78,105 @@ export async function updateChat(
   return res.chat;
 }
 
-// Streaming message send — returns an async generator of text chunks
+// ── Image generation ──────────────────────────────────────────────────────────
 export async function generateImage(payload: {
   provider: "google" | "openai";
   prompt: string;
 }): Promise<{ provider: string; model: string; mimeType: string; data: string }> {
-  const data = await fetchJSON<{ image: { provider: string; model: string; mimeType: string; data: string } }>(`${BASE}/images`, {
+  const data = await fetchJSON<{
+    image: { provider: string; model: string; mimeType: string; data: string };
+  }>(`${BASE}/images`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
   return data.image;
 }
 
+// ── Preferences ───────────────────────────────────────────────────────────────
+export async function fetchPreferences(): Promise<UserPreference> {
+  const data = await fetchJSON<{ preference: UserPreference }>(`${BASE}/preferences`);
+  return data.preference;
+}
+
+export async function savePreferences(pref: {
+  preferredProvider: string;
+  preferredModel: string;
+}): Promise<UserPreference> {
+  const data = await fetchJSON<{ preference: UserPreference }>(`${BASE}/preferences`, {
+    method: "PUT",
+    body: JSON.stringify(pref),
+  });
+  return data.preference;
+}
+
+// ── Memories ──────────────────────────────────────────────────────────────────
+export async function fetchMemories(): Promise<Memory[]> {
+  const data = await fetchJSON<{ memories: Memory[] }>(`${BASE}/preferences/memories`);
+  return data.memories;
+}
+
+export async function createMemory(memory: {
+  category: Memory["category"];
+  content: string;
+}): Promise<Memory> {
+  const data = await fetchJSON<{ memory: Memory }>(`${BASE}/preferences/memories`, {
+    method: "POST",
+    body: JSON.stringify(memory),
+  });
+  return data.memory;
+}
+
+export async function deleteMemory(id: string): Promise<void> {
+  await fetchJSON(`${BASE}/preferences/memories/${id}`, { method: "DELETE" });
+}
+
+export async function clearMemories(): Promise<void> {
+  await fetchJSON(`${BASE}/preferences/memories`, { method: "DELETE" });
+}
+
+// ── Research ──────────────────────────────────────────────────────────────────
+export async function fetchResearchStatus(): Promise<{
+  available: boolean;
+  provider: string | null;
+  message: string;
+}> {
+  return fetchJSON(`${BASE}/research/status`);
+}
+
+export async function runResearch(query: string): Promise<ResearchResult> {
+  return fetchJSON<ResearchResult>(`${BASE}/research`, {
+    method: "POST",
+    body: JSON.stringify({ query }),
+  });
+}
+
+// ── Streaming message send ────────────────────────────────────────────────────
 export async function* sendMessage(
   chatId: string,
   content: string,
   provider?: string,
   model?: string,
-  signal?: AbortSignal
-): AsyncGenerator<{ chunk?: string; done?: boolean; error?: string; model?: string; provider?: string }> {
+  signal?: AbortSignal,
+  attachmentDataUrl?: string | null,
+  attachmentMimeType?: string | null
+): AsyncGenerator<{
+  chunk?: string;
+  done?: boolean;
+  error?: string;
+  model?: string;
+  provider?: string;
+}> {
   const res = await fetch(`${BASE}/chats/${chatId}/messages`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, provider, model }),
+    body: JSON.stringify({
+      content,
+      provider,
+      model,
+      attachmentDataUrl: attachmentDataUrl ?? undefined,
+      attachmentMimeType: attachmentMimeType ?? undefined,
+    }),
     signal,
   });
 

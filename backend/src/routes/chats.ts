@@ -5,10 +5,12 @@ import { db, schema } from "../db/index.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import {
   getAvailableModels,
+  getDefaultModel,
   getModel,
   getProviderFailureMessage,
 } from "../lib/models.js";
-import { streamText } from "ai";
+import { buildSystemPrompt } from "../lib/systemPrompt.js";
+import { streamText, type ModelMessage } from "ai";
 
 const router = Router();
 router.use(requireAuth);
@@ -24,7 +26,6 @@ function getUser(req: Request): AuthUser {
   return (req as Request & { user: AuthUser }).user;
 }
 
-// Helper — verify ownership
 async function ownedChat(chatId: string, userId: string) {
   const [c] = await db
     .select()
@@ -43,7 +44,17 @@ function parseChatId(req: Request, res: Response): string | null {
   return parsed.data;
 }
 
-// GET /api/chats — list authenticated user's chats
+// ── Fetch user memories for system prompt ──────────────────────────────────
+async function getUserMemories(userId: string) {
+  const rows = await db
+    .select({ category: schema.memory.category, content: schema.memory.content })
+    .from(schema.memory)
+    .where(eq(schema.memory.userId, userId))
+    .orderBy(schema.memory.createdAt);
+  return rows;
+}
+
+// GET /api/chats
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   const user = getUser(req);
   const chats = await db
@@ -54,7 +65,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   res.json({ chats });
 });
 
-// POST /api/chats — create a new chat
+// POST /api/chats
 const createChatSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   selectedProvider: z.string().min(1).optional(),
@@ -68,27 +79,35 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
     return;
   }
+
   const { title, selectedProvider, selectedModel } = parsed.data;
   const models = getAvailableModels();
   const hasRequestedModel = Boolean(selectedProvider || selectedModel);
-  const selectedEntry =
-    hasRequestedModel
-      ? models.find(
-          (entry) =>
-            entry.provider === selectedProvider && entry.model === selectedModel
-        )
-      : models.find((entry) => entry.available) ?? models[0];
-  if (!selectedEntry) {
-    res
-      .status(hasRequestedModel ? 400 : 503)
-      .json({ error: hasRequestedModel ? "Unknown model selection." : "No AI models are available." });
-    return;
-  }
-  if (hasRequestedModel && !selectedEntry.available) {
-    res.status(400).json({
-      error: `Provider "${selectedEntry.provider}" is not configured. Add its API key to the backend environment.`,
-    });
-    return;
+
+  let chosenProvider: string;
+  let chosenModel: string;
+
+  if (hasRequestedModel) {
+    const entry = models.find(
+      (e) => e.provider === selectedProvider && e.model === selectedModel
+    );
+    if (!entry) {
+      res.status(400).json({ error: "Unknown model selection." });
+      return;
+    }
+    if (!entry.available) {
+      res.status(400).json({
+        error: `Provider "${entry.provider}" is not configured. Add its API key to the backend environment.`,
+      });
+      return;
+    }
+    chosenProvider = entry.provider;
+    chosenModel = entry.model;
+  } else {
+    // No explicit model — use default (Gemini, or first available)
+    const def = getDefaultModel();
+    chosenProvider = def.provider;
+    chosenModel = def.model;
   }
 
   const [newChat] = await db
@@ -96,8 +115,8 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     .values({
       userId: user.id,
       title: title ?? "New Chat",
-      selectedProvider: selectedEntry.provider,
-      selectedModel: selectedEntry.model,
+      selectedProvider: chosenProvider,
+      selectedModel: chosenModel,
     })
     .returning();
   res.status(201).json({ chat: newChat });
@@ -170,6 +189,9 @@ const messageSchema = z.object({
   content: z.string().trim().min(1).max(32_000),
   provider: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
+  // Optional base64 image attachment for vision models
+  attachmentDataUrl: z.string().optional(),
+  attachmentMimeType: z.string().optional(),
 });
 
 router.post("/:id/messages", async (req: Request, res: Response): Promise<void> => {
@@ -197,17 +219,56 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const history = await db
-    .select()
-    .from(schema.message)
-    .where(eq(schema.message.chatId, chatRecord.id))
-    .orderBy(schema.message.createdAt);
+  const [history, memories] = await Promise.all([
+    db
+      .select()
+      .from(schema.message)
+      .where(eq(schema.message.chatId, chatRecord.id))
+      .orderBy(schema.message.createdAt),
+    getUserMemories(user.id),
+  ]);
 
-  const aiMessages = history.map((m) => ({
-    role: m.role as "user" | "assistant",
-    content: m.content,
-  }));
-  aiMessages.push({ role: "user", content: parsed.data.content });
+  const systemPrompt = buildSystemPrompt({
+    userName: user.name,
+    userMessage: parsed.data.content,
+    memories,
+    provider,
+  });
+
+  // Build message history — handle vision attachment on the latest user turn
+  const aiMessages: ModelMessage[] = history.map((m) => {
+    if (m.role === "assistant") {
+      return { role: "assistant" as const, content: m.content };
+    }
+    return { role: "user" as const, content: m.content };
+  });
+
+  // Add the current user turn — with optional image attachment for vision models
+  const hasAttachment =
+    parsed.data.attachmentDataUrl &&
+    parsed.data.attachmentMimeType &&
+    (provider === "google" || provider === "openai");
+
+  if (hasAttachment && parsed.data.attachmentDataUrl && parsed.data.attachmentMimeType) {
+    // Extract base64 from data URL (strip "data:image/png;base64," prefix)
+    const base64 = parsed.data.attachmentDataUrl.includes(",")
+      ? parsed.data.attachmentDataUrl.split(",")[1]
+      : parsed.data.attachmentDataUrl;
+
+    aiMessages.push({
+      role: "user",
+      content: [
+        { type: "text", text: parsed.data.content },
+        {
+          type: "image",
+          image: base64,
+          mediaType: parsed.data.attachmentMimeType,
+        },
+      ],
+    });
+  } else {
+    aiMessages.push({ role: "user", content: parsed.data.content });
+  }
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -229,6 +290,7 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   try {
     const { textStream } = streamText({
       model: aiModel,
+      system: systemPrompt,
       messages: aiMessages,
       abortSignal: AbortSignal.any([
         abortController.signal,

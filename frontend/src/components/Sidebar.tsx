@@ -15,6 +15,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "../hooks/useAuth.js";
 import { createChat, deleteChat } from "../lib/api.js";
+import MemoryPanel from "./MemoryPanel.js";
 import type { Chat } from "../types/index.js";
 
 interface Props {
@@ -100,7 +101,7 @@ export default function Sidebar({
       {!open && (
         <button
           onClick={onToggle}
-          className="fixed top-4 left-4 z-30 p-2 rounded-lg hover:bg-gray-200 text-gray-600"
+          className="fixed top-4 left-4 z-30 p-2 rounded-lg hover:bg-gray-200 text-gray-600 cursor-pointer"
           aria-label="Open sidebar"
         >
           <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
@@ -125,7 +126,7 @@ export default function Sidebar({
           />
           <button
             onClick={onToggle}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 cursor-pointer"
             aria-label="Close sidebar"
           >
             <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
@@ -136,7 +137,7 @@ export default function Sidebar({
         <div className="px-3 pt-3">
           <button
             onClick={handleNewChat}
-            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 font-medium text-sm transition-colors group"
+            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 font-medium text-sm transition-colors group cursor-pointer"
           >
             <FontAwesomeIcon icon={faPlus} className="text-indigo-500 group-hover:text-indigo-600 w-3.5 h-3.5" />
             New Chat
@@ -152,7 +153,7 @@ export default function Sidebar({
               placeholder="Search chats…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
+              className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none cursor-text"
             />
           </div>
         </div>
@@ -193,7 +194,7 @@ export default function Sidebar({
                     <button
                       onClick={(e) => handleDelete(e, c.id)}
                       disabled={deletingId === c.id}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-red-500 text-gray-400 transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-red-500 text-gray-400 transition-opacity cursor-pointer disabled:cursor-not-allowed"
                       aria-label="Delete chat"
                     >
                       <FontAwesomeIcon icon={faTrash} className="w-3 h-3" />
@@ -210,23 +211,33 @@ export default function Sidebar({
           <button
             onClick={() => setSettingsOpen((current) => !current)}
             aria-expanded={settingsOpen}
-            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-600 text-sm transition-colors"
+            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-600 text-sm transition-colors cursor-pointer"
           >
             <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5" />
             Settings
           </button>
           {settingsOpen && (
-            <section aria-label="Settings" className="rounded-lg bg-gray-50 p-3">
-              <p className="mb-2 text-xs font-medium text-gray-500">Appearance</p>
-              <button
-                onClick={onThemeToggle}
-                className="flex items-center gap-2 text-sm text-gray-700"
-                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-                aria-pressed={theme === "dark"}
-              >
-                <FontAwesomeIcon icon={theme === "dark" ? faSun : faMoon} className="w-3.5 h-3.5" />
-                {theme === "dark" ? "Light theme" : "Dark theme"}
-              </button>
+            <section aria-label="Settings" className="rounded-lg bg-gray-50 p-3 space-y-3">
+              <div>
+                <p className="mb-2 text-xs font-medium text-gray-500">Appearance</p>
+                <button
+                  onClick={onThemeToggle}
+                  className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+                  aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+                  aria-pressed={theme === "dark"}
+                >
+                  <FontAwesomeIcon icon={theme === "dark" ? faSun : faMoon} className="w-3.5 h-3.5" />
+                  {theme === "dark" ? "Light theme" : "Dark theme"}
+                </button>
+              </div>
+              <div>
+                <p className="mb-1 text-xs font-medium text-gray-500">Default AI</p>
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Google Gemini is the default for new chats when a valid AI Studio key is configured.
+                  Your last model choice is saved to your account.
+                </p>
+              </div>
+              <MemoryPanel />
             </section>
           )}
           {actionError && (
@@ -247,7 +258,7 @@ export default function Sidebar({
               <button
                 onClick={handleSignOut}
                 disabled={loggingOut}
-                className="p-1 rounded hover:text-red-500 text-gray-400 disabled:opacity-50"
+                className="p-1 rounded hover:text-red-500 text-gray-400 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 aria-label="Sign out"
               >
                 <FontAwesomeIcon icon={faRightFromBracket} className="w-3.5 h-3.5" />

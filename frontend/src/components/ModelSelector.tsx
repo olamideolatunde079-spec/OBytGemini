@@ -50,7 +50,7 @@ export default function ModelSelector({ models, provider, model, onChange, disab
       <button
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-300 bg-white hover:bg-gray-50 text-sm text-gray-700 font-medium transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-300 bg-white hover:bg-gray-50 text-sm text-gray-700 font-medium transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -79,9 +79,9 @@ export default function ModelSelector({ models, provider, model, onChange, disab
                     disabled={!m.available}
                     className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm transition-colors text-left ${
                       m.provider === provider && m.model === model
-                        ? "bg-indigo-50 text-indigo-800 font-medium"
+                        ? "bg-indigo-50 text-indigo-800 font-medium cursor-pointer"
                         : m.available
-                        ? "text-gray-700 hover:bg-gray-100"
+                        ? "text-gray-700 hover:bg-gray-100 cursor-pointer"
                         : "text-gray-400 cursor-not-allowed"
                     }`}
                     role="option"

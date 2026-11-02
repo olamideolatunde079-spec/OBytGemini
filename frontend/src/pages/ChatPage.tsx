@@ -10,6 +10,11 @@ import {
   createChat,
   generateImage,
   sendMessage,
+  fetchConfig,
+  fetchPreferences,
+  savePreferences,
+  runResearch,
+  fetchResearchStatus,
 } from "../lib/api.js";
 import type { Chat, Message, ModelInfo } from "../types/index.js";
 
@@ -17,59 +22,105 @@ interface OutletCtx {
   refreshChats: () => void;
 }
 
+// Vision-capable models that accept image attachments
+const VISION_PROVIDERS = new Set(["google", "openai"]);
+
 export default function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const { refreshChats } = useOutletContext<OutletCtx>();
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Model state
+  // ── Model state ───────────────────────────────────────────────────────────
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [provider, setProvider] = useState("google");
-  const [model, setModel] = useState("gemini-3.8-flash");
+  const [provider, setProvider] = useState("google");      // Gemini default
+  const [model, setModel] = useState("gemini-3.8-flash");  // Gemini default
   const [loadingModels, setLoadingModels] = useState(true);
+  // Track if preference was saved so we don't re-save on every keystroke
+  const preferenceLoadedRef = useRef(false);
 
-  // Chat state
+  // ── Chat state ────────────────────────────────────────────────────────────
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingChat, setLoadingChat] = useState(false);
 
-  // Composer state
+  // ── Composer state ────────────────────────────────────────────────────────
   const [input, setInput] = useState("");
   const [generating, setGenerating] = useState(false);
   const [imageMode, setImageMode] = useState(false);
+  const [researchMode, setResearchMode] = useState(false);
+  const [researchAvailable, setResearchAvailable] = useState(false);
+  const [attachment, setAttachment] = useState<{
+    dataUrl: string;
+    mimeType: string;
+  } | null>(null);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-scroll ref
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const hasLoadedChatRef = useRef(false);
   const retainErrorOnNavigationRef = useRef(false);
 
-  // ── Load available models once ────────────────────────────────────────────
+  // ── Load models + user preferences (default to Gemini) ───────────────────
   useEffect(() => {
     let active = true;
-    fetchModels()
-      .then((list) => {
-        if (!active) return;
-        setModels(list);
-        const first = list.find((m) => m.available);
-        if (first && !hasLoadedChatRef.current) {
-          setProvider(first.provider);
-          setModel(first.model);
+
+    Promise.all([
+      fetchModels(),
+      fetchConfig().catch(() => null),
+      fetchPreferences().catch(() => null),
+      fetchResearchStatus().catch(() => null),
+    ]).then(([modelList, config, pref, research]) => {
+      if (!active) return;
+      setModels(modelList);
+      setLoadingModels(false);
+      setResearchAvailable(Boolean(research?.available || config?.features?.research));
+
+      // Already loaded a chat — its provider/model takes priority
+      if (hasLoadedChatRef.current) return;
+
+      // 1. User's saved preference
+      if (pref?.preferredProvider && pref?.preferredModel) {
+        const exists = modelList.some(
+          (m) => m.provider === pref.preferredProvider && m.model === pref.preferredModel
+        );
+        if (exists) {
+          setProvider(pref.preferredProvider);
+          setModel(pref.preferredModel);
+          preferenceLoadedRef.current = true;
+          return;
         }
-      })
-      .catch((err: Error) => {
-        if (active) setModelsError(`Could not load models: ${err.message}`);
-      })
-      .finally(() => {
-        if (active) setLoadingModels(false);
-      });
-    return () => {
-      active = false;
-    };
+      }
+
+      // 2. Server-advertised default (Gemini if key is valid)
+      if (config?.defaults?.provider && config?.defaults?.model) {
+        const defExists = modelList.some(
+          (m) =>
+            m.provider === config.defaults.provider &&
+            m.model === config.defaults.model &&
+            m.available
+        );
+        if (defExists) {
+          setProvider(config.defaults.provider);
+          setModel(config.defaults.model);
+          return;
+        }
+      }
+
+      // 3. First available model
+      const first = modelList.find((m) => m.available);
+      if (first) {
+        setProvider(first.provider);
+        setModel(first.model);
+      }
+    }).catch((err: Error) => {
+      if (active) setModelsError(`Could not load models: ${err.message}`);
+      setLoadingModels(false);
+    });
+
+    return () => { active = false; };
   }, []);
 
   // ── Load chat when chatId changes ─────────────────────────────────────────
@@ -81,9 +132,8 @@ export default function ChatPage() {
       setChat(null);
       setMessages([]);
       setLoadingChat(false);
-      return () => {
-        active = false;
-      };
+      setAttachment(null);
+      return () => { active = false; };
     }
     hasLoadedChatRef.current = true;
     setLoadingChat(true);
@@ -99,6 +149,7 @@ export default function ChatPage() {
         setMessages(msgs);
         setProvider(c.selectedProvider);
         setModel(c.selectedModel);
+        setAttachment(null);
       })
       .catch((err: Error) => {
         if (active) setError(err.message);
@@ -106,20 +157,34 @@ export default function ChatPage() {
       .finally(() => {
         if (active) setLoadingChat(false);
       });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [chatId]);
 
-  // ── Auto-scroll to bottom on new messages ─────────────────────────────────
+  // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
 
-  // ── Submit a message ──────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async () => {
-    const content = input.trim();
-    if (!content || generating) return;
+  // ── Model change — save preference immediately ────────────────────────────
+  const handleModelChange = useCallback((p: string, m: string) => {
+    setProvider(p);
+    setModel(m);
+    if (p !== "google" && p !== "openai") setImageMode(false);
+    // Persist preference asynchronously (don't block UI)
+    savePreferences({ preferredProvider: p, preferredModel: m }).catch(() => {
+      // Silently ignore — preference save failure is non-critical
+    });
+  }, []);
+
+  const handleEditPrompt = useCallback((content: string) => {
+    setInput(content);
+    setImageMode(false);
+    setResearchMode(false);
+  }, []);
+
+  // ── Send a chat message ───────────────────────────────────────────────────
+  const sendChatContent = useCallback(async (content: string, currentAttachment: typeof attachment) => {
+    if ((!content && !currentAttachment) || generating) return;
 
     setError(null);
     setGenerating(true);
@@ -146,18 +211,20 @@ export default function ChatPage() {
       return;
     }
 
-    // Optimistic user message
     const optimisticMsg: Message = {
       id: `tmp-${Date.now()}`,
       chatId: activeChatId,
       role: "user",
-      content,
+      content: content || "(image attachment)",
+      attachmentDataUrl: currentAttachment?.dataUrl ?? null,
+      attachmentMimeType: currentAttachment?.mimeType ?? null,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimisticMsg]);
-
-    // Stream AI response
+    setInput("");
+    setAttachment(null);
     setStreamingText("");
+
     let accumulated = "";
     let finalProvider = provider;
     let finalModel = model;
@@ -167,21 +234,16 @@ export default function ChatPage() {
     try {
       for await (const event of sendMessage(
         activeChatId,
-        content,
+        content || "(Analyze the attached image and describe what you see in detail.)",
         provider,
         model,
-        controller.signal
+        controller.signal,
+        currentAttachment?.dataUrl ?? null,
+        currentAttachment?.mimeType ?? null
       )) {
         if (controller.signal.aborted) break;
-
-        if (event.error) {
-          failureMessage = event.error;
-          break;
-        }
-        if (event.chunk) {
-          accumulated += event.chunk;
-          setStreamingText(accumulated);
-        }
+        if (event.error) { failureMessage = event.error; break; }
+        if (event.chunk) { accumulated += event.chunk; setStreamingText(accumulated); }
         if (event.done) {
           completed = true;
           finalProvider = event.provider ?? provider;
@@ -195,7 +257,6 @@ export default function ChatPage() {
     }
 
     if (completed) {
-      setInput("");
       const assistantMsg: Message = {
         id: `stream-${Date.now()}`,
         chatId: activeChatId,
@@ -207,7 +268,7 @@ export default function ChatPage() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } else {
-      setMessages((prev) => prev.filter((message) => message.id !== optimisticMsg.id));
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
       if (!controller.signal.aborted) {
         setError(
           failureMessage ??
@@ -223,9 +284,33 @@ export default function ChatPage() {
       if (!completed) retainErrorOnNavigationRef.current = true;
       navigate(`/chat/${activeChatId}`, { replace: true });
     }
-    refreshChats(); // Refresh sidebar titles
-  }, [input, generating, chatId, provider, model, navigate, refreshChats]);
+    refreshChats();
+  }, [generating, chatId, provider, model, navigate, refreshChats]);
 
+  const handleSubmit = useCallback(async () => {
+    await sendChatContent(input.trim(), attachment);
+  }, [sendChatContent, input, attachment]);
+
+  const handleRegenerate = useCallback(
+    async (assistantIndex: number) => {
+      if (generating) return;
+      const userMsg = [...messages]
+        .slice(0, assistantIndex)
+        .reverse()
+        .find((m) => m.role === "user");
+      if (!userMsg) {
+        setError("Could not find the original prompt to regenerate.");
+        return;
+      }
+      setMessages((prev) => prev.slice(0, assistantIndex));
+      setImageMode(false);
+      setResearchMode(false);
+      await sendChatContent(userMsg.content, null);
+    },
+    [generating, messages, sendChatContent]
+  );
+
+  // ── Generate image ────────────────────────────────────────────────────────
   const handleGenerateImage = useCallback(async () => {
     const prompt = input.trim();
     if (!prompt || generating || (provider !== "google" && provider !== "openai")) return;
@@ -239,13 +324,13 @@ export default function ChatPage() {
       content: prompt,
       createdAt: new Date().toISOString(),
     };
-    setMessages((previous) => [...previous, promptMessage]);
+    setMessages((prev) => [...prev, promptMessage]);
 
     try {
-      const image = await generateImage({ provider, prompt });
+      const image = await generateImage({ provider: provider as "google" | "openai", prompt });
       setInput("");
-      setMessages((previous) => [
-        ...previous,
+      setMessages((prev) => [
+        ...prev,
         {
           id: `image-${Date.now()}`,
           chatId: chatId ?? "",
@@ -259,46 +344,104 @@ export default function ChatPage() {
         },
       ]);
     } catch (err: unknown) {
-      setMessages((previous) =>
-        previous.filter((message) => message.id !== promptMessage.id)
-      );
+      setMessages((prev) => prev.filter((m) => m.id !== promptMessage.id));
       setError(err instanceof Error ? err.message : "Image generation failed.");
     } finally {
       setGenerating(false);
     }
   }, [input, generating, provider, chatId]);
 
+  // ── Web research ──────────────────────────────────────────────────────────
+  const handleResearch = useCallback(async () => {
+    const query = input.trim();
+    if (!query || generating) return;
+    if (!researchAvailable) {
+      setError(
+        "Web research is not configured. Add TAVILY_API_KEY to backend/.env (https://tavily.com)."
+      );
+      return;
+    }
+
+    setError(null);
+    setGenerating(true);
+    const promptMessage: Message = {
+      id: `tmp-${Date.now()}`,
+      chatId: chatId ?? "",
+      role: "user",
+      content: query,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, promptMessage]);
+
+    try {
+      const result = await runResearch(query);
+      if (!result.researched) {
+        throw new Error("Research did not complete.");
+      }
+      setInput("");
+      const sourceLines = result.sources
+        .map((s, i) => `${i + 1}. [${s.title}](${s.url})\n   ${s.snippet}`)
+        .join("\n\n");
+      const content = [
+        result.answer ? `## Summary\n\n${result.answer}` : "## Summary\n\nNo concise answer was returned.",
+        result.sources.length
+          ? `## Sources\n\n${sourceLines}`
+          : "## Sources\n\nNo sources were returned for this query.",
+        `_${result.disclaimer}_`,
+      ].join("\n\n");
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `research-${Date.now()}`,
+          chatId: chatId ?? "",
+          role: "assistant",
+          content,
+          provider: "research",
+          model: "tavily",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    } catch (err: unknown) {
+      setMessages((prev) => prev.filter((m) => m.id !== promptMessage.id));
+      setError(err instanceof Error ? err.message : "Research failed.");
+    } finally {
+      setGenerating(false);
+    }
+  }, [input, generating, researchAvailable, chatId]);
+
   const handleCancel = () => {
     abortRef.current?.abort();
-    setError("Generation stopped. Your prompt was not added to chat history.");
+    setError("Generation stopped. Your prompt was not saved to chat history.");
   };
 
-  const handleModelChange = (p: string, m: string) => {
-    setProvider(p);
-    setModel(m);
-    if (p !== "google" && p !== "openai") setImageMode(false);
-  };
+  const composerSubmit = imageMode
+    ? handleGenerateImage
+    : researchMode
+      ? handleResearch
+      : handleSubmit;
 
   // ── Render ────────────────────────────────────────────────────────────────
   const isNewChat = !chatId;
   const hasMessages = messages.length > 0;
   const selectedModelAvailable = models.some(
-    (item) =>
-      item.available && item.provider === provider && item.model === model
+    (m) => m.available && m.provider === provider && m.model === model
   );
   const modelAvailabilityError = loadingModels
     ? null
     : modelsError ??
       (models.length === 0
         ? "No models are registered. Check the backend configuration."
-        : !models.some((item) => item.available)
+        : !models.some((m) => m.available)
           ? "No AI provider is configured. Add a provider API key to the backend environment."
           : !selectedModelAvailable
-            ? "The selected model is unavailable. Choose a configured model to continue."
-          : null);
+            ? `${provider === "google" ? "Gemini" : provider} is not available with the current API key. ` +
+              (provider === "google"
+                ? "Add a valid Google AI Studio key (starts with AIza) to backend/.env."
+                : "Check the API key for this provider in backend/.env or choose a different model.")
+            : null);
   const visibleError = error ?? modelAvailabilityError;
 
-  // Synthesise a "streaming" message for the bubble list
   const streamingMessage: Message | null =
     generating && streamingText
       ? {
@@ -311,6 +454,8 @@ export default function ChatPage() {
           createdAt: new Date().toISOString(),
         }
       : null;
+
+  const canAttachImages = VISION_PROVIDERS.has(provider) && selectedModelAvailable;
 
   return (
     <div className="flex flex-col h-full">
@@ -325,28 +470,46 @@ export default function ChatPage() {
       {/* Message area */}
       <div className="flex-1 overflow-y-auto">
         {loadingChat ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="h-6 w-6 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+          <div className="flex flex-col gap-4 max-w-3xl mx-auto px-4 py-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className={`flex gap-3 ${i % 2 === 0 ? "justify-end" : "justify-start"}`}>
+                {i % 2 !== 0 && <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse flex-shrink-0" />}
+                <div className={`h-12 rounded-2xl animate-pulse ${i % 2 === 0 ? "w-48 bg-indigo-100" : "w-64 bg-gray-100"}`} />
+              </div>
+            ))}
           </div>
         ) : isNewChat && !hasMessages ? (
           <WelcomeScreen
             userName={user?.name}
-            onPrompt={(p) => {
-              setInput(p);
-            }}
+            onPrompt={(p) => setInput(p)}
           />
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-            {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+            {messages.map((msg, index) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                onEdit={msg.role === "user" ? handleEditPrompt : undefined}
+                canRegenerate={
+                  msg.role === "assistant" &&
+                  index === messages.length - 1 &&
+                  !generating &&
+                  !msg.imageDataUrl &&
+                  msg.provider !== "research"
+                }
+                onRegenerate={
+                  msg.role === "assistant"
+                    ? () => handleRegenerate(index)
+                    : undefined
+                }
+              />
             ))}
             {streamingMessage && (
               <MessageBubble message={streamingMessage} streaming />
             )}
-            {/* Loading indicator when waiting for first token */}
             {generating && !streamingText && (
               <div className="flex gap-3 justify-start">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 select-none">
                   <span className="text-white text-xs font-bold">O</span>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
@@ -366,9 +529,13 @@ export default function ChatPage() {
       {/* Error banner */}
       {visibleError && (
         <div className="mx-4 mb-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between">
-          <span>{visibleError}</span>
+          <span className="flex-1 mr-2">{visibleError}</span>
           {error && (
-            <button onClick={() => setError(null)} className="ml-3 text-red-400 hover:text-red-600 font-bold">
+            <button
+              onClick={() => setError(null)}
+              className="text-red-400 hover:text-red-600 font-bold flex-shrink-0 cursor-pointer"
+              aria-label="Dismiss error"
+            >
               ×
             </button>
           )}
@@ -380,8 +547,8 @@ export default function ChatPage() {
         <PromptComposer
           value={input}
           onChange={setInput}
-          onSubmit={imageMode ? handleGenerateImage : handleSubmit}
-          onCancel={imageMode ? undefined : handleCancel}
+          onSubmit={composerSubmit}
+          onCancel={imageMode || researchMode ? undefined : handleCancel}
           loading={generating}
           models={models}
           provider={provider}
@@ -390,10 +557,26 @@ export default function ChatPage() {
           imageMode={imageMode}
           canGenerateImages={
             (provider === "google" || provider === "openai") &&
-            models.some((item) => item.provider === provider && item.available)
+            models.some((m) => m.provider === provider && m.available)
           }
-          onImageModeChange={setImageMode}
-          disabled={loadingChat || loadingModels || !selectedModelAvailable}
+          onImageModeChange={(enabled) => {
+            setImageMode(enabled);
+            if (enabled) setResearchMode(false);
+          }}
+          researchMode={researchMode}
+          canResearch={researchAvailable}
+          onResearchModeChange={(enabled) => {
+            setResearchMode(enabled);
+            if (enabled) setImageMode(false);
+          }}
+          attachment={attachment}
+          onAttachmentChange={setAttachment}
+          canAttachImages={canAttachImages}
+          disabled={
+            loadingChat ||
+            loadingModels ||
+            (researchMode ? false : !selectedModelAvailable)
+          }
         />
       </div>
     </div>
