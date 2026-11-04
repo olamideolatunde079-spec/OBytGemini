@@ -336,31 +336,29 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    await db.transaction(async (tx) => {
-      await tx.insert(schema.message).values({
-        chatId: chatRecord.id,
-        role: "user",
-        content: parsed.data.content,
-      });
-      await tx.insert(schema.message).values({
-        chatId: chatRecord.id,
-        role: "assistant",
-        content: fullText,
-        provider,
-        model: modelId,
-      });
-
-      const shortTitle = parsed.data.content.slice(0, 60).trim();
-      await tx
-        .update(schema.chat)
-        .set({
-          title: chatRecord.title === "New Chat" ? shortTitle : chatRecord.title,
-          selectedProvider: provider,
-          selectedModel: modelId,
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.chat.id, chatRecord.id));
+    // Sequential inserts — neon-http driver does not support transactions
+    await db.insert(schema.message).values({
+      chatId: chatRecord.id,
+      role: "user",
+      content: parsed.data.content,
     });
+    await db.insert(schema.message).values({
+      chatId: chatRecord.id,
+      role: "assistant",
+      content: fullText,
+      provider,
+      model: modelId,
+    });
+    const shortTitle = parsed.data.content.slice(0, 60).trim();
+    await db
+      .update(schema.chat)
+      .set({
+        title: chatRecord.title === "New Chat" ? shortTitle : chatRecord.title,
+        selectedProvider: provider,
+        selectedModel: modelId,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.chat.id, chatRecord.id));
 
     sendEvent({ done: true, provider, model: modelId });
     res.end();

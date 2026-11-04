@@ -1,3 +1,7 @@
+// ── MUST be first: patch fetch for Neon DB before any module imports DB ──
+import { installCurlFetchForNeon } from "./lib/curlFetch.js";
+installCurlFetchForNeon();
+
 import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";

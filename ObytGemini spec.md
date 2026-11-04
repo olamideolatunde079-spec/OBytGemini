@@ -4,7 +4,7 @@
 **Type:** Multi-provider AI chat application\
 **Status:** Initial implementation specification\
 **GitHub Repository:** (https://github.com/olamideolatunde079-spec/OBytGemini)
-**Local frontend:** `http://localhost:5173`\
+**Local frontend:** `http://localhost:5173`
 **Local backend:** `http://localhost:5000`
 
 > Security: This specification intentionally contains
