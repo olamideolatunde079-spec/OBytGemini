@@ -35,14 +35,19 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 // ── Session ───────────────────────────────────────────────────────────────────
 
 export async function getSession(): Promise<Session | null> {
-  const res = await fetch("/api/auth/get-session", {
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new Error(`Could not check the session (HTTP ${res.status}).`);
+  try {
+    const res = await fetch("/api/auth/get-session", {
+      credentials: "include",
+    });
+    // 401 = no session (expected). 500 = backend temporarily unavailable.
+    // In both cases, return null instead of throwing so the UI doesn't crash.
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.user ? (data as Session) : null;
+  } catch {
+    // Network error (backend down/restarting) — return null, don't crash
+    return null;
   }
-  const data = await res.json();
-  return data?.user ? (data as Session) : null;
 }
 
 // ── Email / Password ──────────────────────────────────────────────────────────
