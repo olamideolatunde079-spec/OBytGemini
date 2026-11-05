@@ -1,14 +1,14 @@
 /**
  * curlFetch — async curl-based fetch polyfill for Neon DB calls.
  *
- * Uses spawn (async) instead of execFileSync (blocking) so the Node.js
- * event loop is NEVER blocked. This was the primary cause of 1-minute delays:
- * execFileSync blocked the entire event loop during every DB query.
+ * WHY THIS EXISTS (local dev only):
+ * On this specific development machine, Node.js's built-in fetch (undici)
+ * cannot open TCP connections to AWS IP ranges (ETIMEDOUT). The Neon
+ * PostgreSQL API lives on AWS IPs. curl uses the system's libcurl which
+ * CAN reach those IPs, so we route Neon-bound fetch calls through curl.
  *
- * Each DB query was blocking for ~1-3 seconds:
- *   auth check + chat lookup + history + memories + 3 saves = 6-18s blocked
- *
- * With spawn (async), the event loop stays free during DB queries.
+ * ON VERCEL: Node.js fetch works fine — no curl needed.
+ * The IS_VERCEL check skips this patch entirely in production.
  */
 
 import { spawn } from "node:child_process";
@@ -121,6 +121,14 @@ setInterval(() => {
 
 // ── Install the patched fetch ──────────────────────────────────────────────
 export function installCurlFetchForNeon(): void {
+  // On Vercel (and most cloud environments), Node.js fetch works fine to Neon.
+  // Only patch fetch on local machines where Node's undici is blocked from AWS.
+  const isVercel = Boolean(process.env.VERCEL);
+  if (isVercel) {
+    console.log("✅ Vercel environment — using native fetch for Neon DB");
+    return;
+  }
+
   const originalFetch = globalThis.fetch;
 
   globalThis.fetch = async function patchedFetch(

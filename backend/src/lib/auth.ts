@@ -53,6 +53,8 @@ export const auth = betterAuth({
     "http://localhost:5175",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5175",
+    // Vercel preview URLs (*.vercel.app)
+    ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
   ],
 
   emailAndPassword: {

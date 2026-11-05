@@ -89,3 +89,6 @@ app.use(
 app.listen(PORT, () => {
   console.log(`✅ OBytGemini backend running on http://localhost:${PORT}`);
 });
+
+// Export for Vercel serverless (and other test environments)
+export default app;
