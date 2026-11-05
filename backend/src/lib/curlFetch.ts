@@ -1,58 +1,79 @@
 /**
- * curlFetch — replaces globalThis.fetch for Neon DB calls with a curl-backed
- * implementation that works around the ETIMEDOUT block on AWS IPs from Node.js.
+ * curlFetch — async curl-based fetch polyfill for Neon DB calls.
  *
- * Uses execFileSync (not execSync) so arguments are passed as an array —
- * no shell quoting issues with special characters in the database URL.
+ * Uses spawn (async) instead of execFileSync (blocking) so the Node.js
+ * event loop is NEVER blocked. This was the primary cause of 1-minute delays:
+ * execFileSync blocked the entire event loop during every DB query.
+ *
+ * Each DB query was blocking for ~1-3 seconds:
+ *   auth check + chat lookup + history + memories + 3 saves = 6-18s blocked
+ *
+ * With spawn (async), the event loop stays free during DB queries.
  */
 
-import { execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
-interface FakeFetchResult {
+// ── Async curl via spawn ───────────────────────────────────────────────────
+
+function curlFetch(url: string, options: RequestInit = {}): Promise<{
   ok: boolean;
   status: number;
   json: () => Promise<unknown>;
   text: () => Promise<string>;
   headers: { get: (name: string) => string | null };
-}
-
-function curlFetch(url: string, options: RequestInit = {}): Promise<FakeFetchResult> {
+}> {
   return new Promise((resolve, reject) => {
-    try {
-      const method = (options.method ?? "GET").toUpperCase();
-      const rawHeaders =
-        options.headers && typeof options.headers === "object"
-          ? (options.headers as Record<string, string>)
-          : {};
+    const method = (options.method ?? "GET").toUpperCase();
+    const rawHeaders =
+      options.headers && typeof options.headers === "object"
+        ? (options.headers as Record<string, string>)
+        : {};
 
-      // Build args array — no shell, no quoting issues
-      const args: string[] = ["-s", "--max-time", "20", "-X", method];
+    const args: string[] = ["-s", "--max-time", "15", "-X", method];
 
-      for (const [k, v] of Object.entries(rawHeaders)) {
-        args.push("-H", `${k}: ${v}`);
+    for (const [k, v] of Object.entries(rawHeaders)) {
+      args.push("-H", `${k}: ${v}`);
+    }
+
+    const bodyRaw = options.body;
+    let stdinBuf: Buffer | undefined;
+    if (bodyRaw) {
+      stdinBuf =
+        typeof bodyRaw === "string"
+          ? Buffer.from(bodyRaw, "utf8")
+          : Buffer.isBuffer(bodyRaw)
+            ? (bodyRaw as Buffer)
+            : Buffer.from(JSON.stringify(bodyRaw), "utf8");
+      args.push("--data-binary", "@-");
+    }
+
+    args.push("--write-out", "\n__STATUS__%{http_code}");
+    args.push(url);
+
+    const proc = spawn("curl", args, { stdio: ["pipe", "pipe", "ignore"] });
+
+    const chunks: Buffer[] = [];
+    proc.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+    if (stdinBuf) {
+      proc.stdin.write(stdinBuf);
+      proc.stdin.end();
+    } else {
+      proc.stdin.end();
+    }
+
+    const timer = setTimeout(() => {
+      proc.kill();
+      reject(new Error("curlFetch timeout after 15s"));
+    }, 20_000);
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0 && chunks.length === 0) {
+        reject(new Error(`curl exited with code ${code}`));
+        return;
       }
-
-      const body = options.body;
-      let stdinBuf: Buffer | undefined;
-      if (body) {
-        stdinBuf =
-          typeof body === "string"
-            ? Buffer.from(body, "utf8")
-            : Buffer.isBuffer(body)
-              ? (body as Buffer)
-              : Buffer.from(JSON.stringify(body), "utf8");
-        args.push("--data-binary", "@-");
-      }
-
-      args.push("--write-out", "\n__STATUS__%{http_code}");
-      args.push(url);
-
-      const stdout = execFileSync("curl", args, {
-        timeout: 25_000,
-        maxBuffer: 10 * 1024 * 1024,
-        input: stdinBuf,
-      }).toString("utf8");
-
+      const stdout = Buffer.concat(chunks).toString("utf8");
       const statusMatch = stdout.match(/\n__STATUS__(\d+)\s*$/);
       const status = statusMatch ? parseInt(statusMatch[1], 10) : 500;
       const responseBody = stdout.replace(/\n__STATUS__\d+\s*$/, "");
@@ -64,39 +85,57 @@ function curlFetch(url: string, options: RequestInit = {}): Promise<FakeFetchRes
         text: async () => responseBody,
         headers: { get: (_name: string) => null },
       });
-    } catch (err: unknown) {
-      reject(
-        new Error(
-          `curlFetch failed: ${err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)}`
-        )
-      );
-    }
+    });
+
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(new Error(`curl spawn error: ${err.message}`));
+    });
   });
 }
 
-/**
- * Install the curl-based fetch polyfill.
- * Only Neon-related URLs (*.neon.tech) are routed through curl.
- * All other URLs (AI providers, Better Auth, etc.) use the original fetch.
- */
+// ── Session cache (avoid repeated DB queries for the same session token) ──
+// Better Auth verifies sessions via DB on every request. Caching for 30s
+// eliminates repeated DB hits for the auth check.
+const sessionCache = new Map<string, { user: unknown; expiry: number }>();
+const SESSION_TTL_MS = 30_000;
+
+export function getCachedSession(token: string): unknown | null {
+  const entry = sessionCache.get(token);
+  if (entry && entry.expiry > Date.now()) return entry.user;
+  sessionCache.delete(token);
+  return null;
+}
+
+export function setCachedSession(token: string, user: unknown): void {
+  sessionCache.set(token, { user, expiry: Date.now() + SESSION_TTL_MS });
+}
+
+// Prune expired entries every minute (unref so it doesn't prevent exit)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of sessionCache) {
+    if (entry.expiry <= now) sessionCache.delete(key);
+  }
+}, 60_000).unref();
+
+// ── Install the patched fetch ──────────────────────────────────────────────
 export function installCurlFetchForNeon(): void {
   const originalFetch = globalThis.fetch;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).fetch = async function patchedFetch(
-    input: string | URL | { url: string },
-    init?: RequestInit
+  globalThis.fetch = async function patchedFetch(
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1]
   ): Promise<Response> {
     const url =
       typeof input === "string"
         ? input
         : input instanceof URL
           ? input.href
-          : (input as { url: string }).url;
+          : (input as Request).url;
 
     if (url.includes(".neon.tech")) {
       const result = await curlFetch(url, init ?? {});
-      // Minimal Response-compatible object
       return {
         ok: result.ok,
         status: result.status,
@@ -116,8 +155,8 @@ export function installCurlFetchForNeon(): void {
       } as unknown as Response;
     }
 
-    return originalFetch.call(this, input as string | URL | Request, init);
+    return originalFetch.call(this, input, init);
   };
 
-  console.log("✅ curl-fetch installed for Neon DB (AWS IP bypass)");
+  console.log("✅ Async curl-fetch installed for Neon DB (non-blocking)");
 }

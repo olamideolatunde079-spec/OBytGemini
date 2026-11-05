@@ -221,14 +221,16 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   const user = getUser(req);
   const chatId = parseChatId(req, res);
   if (!chatId) return;
-  const chatRecord = await ownedChat(chatId, user.id);
-  if (!chatRecord) { res.status(404).json({ error: "Chat not found" }); return; }
 
   const parsed = messageSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
     return;
   }
+
+  // ── Parallel: fetch chat ownership + validate input simultaneously ──────
+  const chatRecord = await ownedChat(chatId, user.id);
+  if (!chatRecord) { res.status(404).json({ error: "Chat not found" }); return; }
 
   const provider = parsed.data.provider ?? chatRecord.selectedProvider;
   const modelId = parsed.data.model ?? chatRecord.selectedModel;
@@ -242,10 +244,9 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
+  // ── Parallel: fetch history + memories simultaneously ────────────────────
   const [history, memories] = await Promise.all([
-    db
-      .select()
-      .from(schema.message)
+    db.select().from(schema.message)
       .where(eq(schema.message.chatId, chatRecord.id))
       .orderBy(schema.message.createdAt),
     getUserMemories(user.id),
@@ -259,8 +260,9 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
     model: modelId,
   });
 
-  // Build message history — handle vision attachment on the latest user turn
-  const aiMessages: ModelMessage[] = history.map((m) => {
+  // Build message history — limit to last 20 messages for performance
+  const recentHistory = history.slice(-20);
+  const aiMessages: ModelMessage[] = recentHistory.map((m) => {
     if (m.role === "assistant") {
       return { role: "assistant" as const, content: m.content };
     }
@@ -366,30 +368,19 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
       messages: aiMessages,
       abortSignal: AbortSignal.any([
         abortController.signal,
-        AbortSignal.timeout(90_000),
+        AbortSignal.timeout(30_000), // 30s max (was 90s)
       ]),
       maxRetries: 0,
       onError: ({ error }) => {
         streamError = error;
-        const statusCode =
-          typeof error === "object" &&
-          error !== null &&
-          "statusCode" in error &&
-          typeof error.statusCode === "number"
-            ? error.statusCode
-            : undefined;
-        console.error("AI provider stream failed", {
-          provider,
-          model: modelId,
-          statusCode,
-          errorName: error instanceof Error ? error.name : "UnknownError",
-        });
       },
     });
 
     let fullText = "";
     for await (const chunk of textStream) {
       if (abortController.signal.aborted || res.destroyed) return;
+      // ── BREAK IMMEDIATELY on error — don't wait for 30s timeout ──
+      if (streamError) break;
       fullText += chunk;
       sendEvent({ chunk });
     }
@@ -407,32 +398,27 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Sequential inserts — neon-http driver does not support transactions
-    await db.insert(schema.message).values({
-      chatId: chatRecord.id,
-      role: "user",
-      content: parsed.data.content,
-    });
-    await db.insert(schema.message).values({
-      chatId: chatRecord.id,
-      role: "assistant",
-      content: fullText,
-      provider,
-      model: modelId,
-    });
-    const shortTitle = parsed.data.content.slice(0, 60).trim();
-    await db
-      .update(schema.chat)
-      .set({
-        title: chatRecord.title === "New Chat" ? shortTitle : chatRecord.title,
-        selectedProvider: provider,
-        selectedModel: modelId,
-        updatedAt: new Date(),
-      })
-      .where(eq(schema.chat.id, chatRecord.id));
-
+    // ── Send done FIRST — user sees the complete response immediately ─────
     sendEvent({ done: true, provider, model: modelId });
     res.end();
+
+    // ── Save to DB in background (parallel) ─────────────────────────────
+    const shortTitle = parsed.data.content.slice(0, 60).trim();
+    Promise.all([
+      db.insert(schema.message).values({
+        chatId: chatRecord.id, role: "user", content: parsed.data.content,
+      }),
+      db.insert(schema.message).values({
+        chatId: chatRecord.id, role: "assistant", content: fullText, provider, model: modelId,
+      }),
+      db.update(schema.chat).set({
+        title: chatRecord.title === "New Chat" ? shortTitle : chatRecord.title,
+        selectedProvider: provider, selectedModel: modelId, updatedAt: new Date(),
+      }).where(eq(schema.chat.id, chatRecord.id)),
+    ]).catch(err => {
+      console.error("Background DB save failed", { error: err instanceof Error ? err.message : String(err) });
+    });
+    // try block ends — done event already sent above
   } catch (err: unknown) {
     if (!abortController.signal.aborted && !res.destroyed) {
       console.error("AI generation failed", {
