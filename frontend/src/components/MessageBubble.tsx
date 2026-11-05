@@ -6,10 +6,41 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCopy, faCheck, faDownload, faExpand, faXmark,
-  faUser, faRotateRight,
+  faUser, faRotateRight, faFilePdf, faFileLines,
 } from "@fortawesome/free-solid-svg-icons";
 import type { Message } from "../types/index.js";
 import type { Components } from "react-markdown";
+
+/* ── File download helpers ─────────────────────────────────────────────── */
+function downloadBlob(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadAsPDF(html: string, title: string) {
+  // Use the browser's print-to-PDF capability
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; color: #1f2937; }
+    pre { background: #f3f4f6; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+    th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+    th { background: #f9fafb; font-weight: 600; }
+    h1 { font-size: 1.5em; } h2 { font-size: 1.25em; } h3 { font-size: 1.1em; }
+    @media print { body { margin: 0; } }
+  </style></head><body>${html}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 500);
+}
 
 /* ── sanitize: allow code highlight classes ── */
 const sanitizeSchema = {
@@ -257,6 +288,54 @@ export default function MessageBubble({ message, streaming, onRegenerate }: Prop
                   <FontAwesomeIcon icon={faRotateRight} className="w-3.5 h-3.5" />
                   Regenerate
                 </button>
+              )}
+              {/* ── File download buttons ── */}
+              {!message.imageDataUrl && (
+                <>
+                  <button
+                    onClick={() => downloadBlob(message.content, `obytgemini-${Date.now()}.txt`, "text/plain")}
+                    className="flex items-center gap-1.5 text-xs transition-colors"
+                    style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
+                    title="Download as TXT"
+                  >
+                    <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5" />
+                    TXT
+                  </button>
+                  <button
+                    onClick={() => downloadBlob(message.content, `obytgemini-${Date.now()}.md`, "text/markdown")}
+                    className="flex items-center gap-1.5 text-xs transition-colors"
+                    style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
+                    title="Download as Markdown"
+                  >
+                    <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5" />
+                    MD
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Convert markdown to simple HTML for PDF printing
+                      const html = message.content
+                        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+                        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/`(.+?)`/g, '<code>$1</code>')
+                        .replace(/\n/g, '<br>');
+                      downloadAsPDF(html, "OBytGemini Response");
+                    }}
+                    className="flex items-center gap-1.5 text-xs transition-colors"
+                    style={{ color: "var(--text-muted)" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
+                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
+                    title="Download as PDF"
+                  >
+                    <FontAwesomeIcon icon={faFilePdf} className="w-3.5 h-3.5" />
+                    PDF
+                  </button>
+                </>
               )}
             </div>
           )}

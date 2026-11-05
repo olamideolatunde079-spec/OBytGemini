@@ -155,6 +155,8 @@ export default function ChatPage() {
 
     let accumulated = "", finalProvider = provider, finalModel = model;
     let completed = false, failMsg: string | null = null;
+    let imageDataUrl: string | null = null;
+    let imageMimeType: string | null = null;
 
     try {
       for await (const ev of sendMessage(
@@ -167,6 +169,10 @@ export default function ChatPage() {
         if (controller.signal.aborted) break;
         if (ev.error) { failMsg = ev.error; break; }
         if (ev.chunk) { accumulated += ev.chunk; setStreamingText(accumulated); }
+        if (ev.image && ev.data) {
+          imageDataUrl = `data:${ev.mimeType};base64,${ev.data}`;
+          imageMimeType = ev.mimeType ?? "image/png";
+        }
         if (ev.done) {
           completed = true;
           finalProvider = ev.provider ?? provider;
@@ -182,6 +188,7 @@ export default function ChatPage() {
       setMessages(prev => [...prev, {
         id: `ai-${Date.now()}`, chatId: activeChatId!, role: "assistant",
         content: accumulated, provider: finalProvider, model: finalModel,
+        imageDataUrl, mimeType: imageMimeType,
         createdAt: new Date().toISOString(),
       }]);
     } else {

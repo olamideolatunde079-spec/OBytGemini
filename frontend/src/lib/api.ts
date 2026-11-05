@@ -165,6 +165,9 @@ export async function* sendMessage(
   error?: string;
   model?: string;
   provider?: string;
+  image?: boolean;
+  mimeType?: string;
+  data?: string;
 }> {
   const res = await fetch(`${BASE}/chats/${chatId}/messages`, {
     method: "POST",

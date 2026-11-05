@@ -186,8 +186,8 @@ export async function generateImage({
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) throw new Error("Google Gemini is unavailable because GEMINI_API_KEY is missing.");
 
-    // gemini-3.5-flash-image supports image generation with responseModalities: IMAGE
-    const imageModel = "gemini-3.5-flash-image";
+    // Use a verified image generation model (Nano Banana 2)
+    const imageModel = "gemini-3.1-flash-image";
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${imageModel}:generateContent`,
       {

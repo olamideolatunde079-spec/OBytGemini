@@ -62,8 +62,8 @@ export default function SignInPage() {
           setError("Please enter your name.");
           return;
         }
-        if (password.length < 12) {
-          setError("Use a password with at least 12 characters.");
+        if (password.length < 8) {
+          setError("Use a password with at least 8 characters.");
           return;
         }
         if (password !== confirmPassword) {
@@ -214,8 +214,7 @@ export default function SignInPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={mode === "signup" ? 12 : undefined}
-                maxLength={128}
+                minLength={mode === "signup" ? 8 : undefined}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 className="w-full pl-9 pr-10 py-2.5 text-sm border border-gray-300 rounded-xl outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all"
               />
@@ -241,8 +240,7 @@ export default function SignInPage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  minLength={12}
-                  maxLength={128}
+                  minLength={8}
                   autoComplete="new-password"
                   className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-xl outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 transition-all"
                 />

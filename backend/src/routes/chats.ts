@@ -8,11 +8,34 @@ import {
   getDefaultModel,
   getModel,
   getProviderFailureMessage,
+  generateImage,
 } from "../lib/models.js";
 import { buildSystemPrompt } from "../lib/systemPrompt.js";
 import { streamText, type ModelMessage } from "ai";
 
 const router = Router();
+
+// ── Image intent detection ─────────────────────────────────────────────────
+// Detects when a user's message is asking for image generation.
+// When detected (and the provider supports images), we auto-route to
+// the image API instead of returning a text "I can't generate images" response.
+const IMAGE_INTENT_PATTERNS = [
+  /\b(create|generate|make|draw|design|paint|render)\b.*\b(image|logo|picture|illustration|poster|graphic|background|mockup|artwork|drawing|painting|photo)\b/i,
+  /\b(image|logo|picture|illustration|poster|graphic|background|mockup|artwork)\b.*\b(for|of|with)\b/i,
+  /\b(create|generate|make|draw|design)\b.*\b(a|an|the)\s+(logo|picture|image|poster|graphic|illustration|background|thumbnail|banner|avatar|icon|emoji|sticker)/i,
+];
+
+function isImageGenerationRequest(message: string): boolean {
+  const lower = message.toLowerCase().trim();
+  // Must NOT be asking about images in a theoretical sense
+  if (lower.includes("what is") || lower.includes("how does") || lower.includes("explain"))
+    return false;
+  return IMAGE_INTENT_PATTERNS.some(p => p.test(lower));
+}
+
+function canProviderGenerateImages(provider: string): boolean {
+  return provider === "google" || provider === "openai";
+}
 router.use(requireAuth);
 
 interface AuthUser {
@@ -276,15 +299,63 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
+  const sendEvent = (event: object) => {
+    if (!res.destroyed) res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  // ── Auto image generation ─────────────────────────────────────────────
+  // If the user's message looks like an image request and the selected
+  // provider supports image generation, route there automatically.
+  if (
+    !hasAttachment && // Don't auto-detect when user attached an image for vision
+    isImageGenerationRequest(parsed.data.content) &&
+    canProviderGenerateImages(provider)
+  ) {
+    try {
+      sendEvent({ chunk: "Generating image…\n\n" });
+      const image = await generateImage({ provider, prompt: parsed.data.content });
+
+      // Persist user message
+      await db.insert(schema.message).values({
+        chatId: chatRecord.id, role: "user", content: parsed.data.content,
+      });
+      // Persist assistant message with image marker
+      await db.insert(schema.message).values({
+        chatId: chatRecord.id, role: "assistant",
+        content: `Generated image: ${parsed.data.content.slice(0, 100)}`,
+        provider: image.provider, model: image.model,
+      });
+      // Update chat title
+      const shortTitle = parsed.data.content.slice(0, 60).trim();
+      await db.update(schema.chat).set({
+        title: chatRecord.title === "New Chat" ? shortTitle : chatRecord.title,
+        selectedProvider: provider, selectedModel: modelId, updatedAt: new Date(),
+      }).where(eq(schema.chat.id, chatRecord.id));
+
+      // Send image as a special event the frontend recognizes
+      sendEvent({
+        image: true,
+        mimeType: image.mimeType,
+        data: image.data,
+        provider: image.provider,
+        model: image.model,
+        done: true,
+      });
+      res.end();
+      return;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Image generation failed.";
+      sendEvent({ error: msg });
+      res.end();
+      return;
+    }
+  }
+
   const abortController = new AbortController();
   const handleDisconnect = () => {
     if (!res.writableEnded) abortController.abort();
   };
   res.on("close", handleDisconnect);
-
-  const sendEvent = (event: object) => {
-    if (!res.destroyed) res.write(`data: ${JSON.stringify(event)}\n\n`);
-  };
 
   let generationFinished = false;
   let streamError: unknown;

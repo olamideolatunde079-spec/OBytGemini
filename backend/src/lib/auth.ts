@@ -59,8 +59,8 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: false,
     requireEmailVerification: false,
-    minPasswordLength: 12,
-    maxPasswordLength: 128,
+    minPasswordLength: 8,
+    // No maxPasswordLength — allow long passphrases
   },
 
   socialProviders,
