@@ -15,6 +15,38 @@ import { streamText, type ModelMessage } from "ai";
 
 const router = Router();
 
+// ── Chat ownership cache ───────────────────────────────────────────────────
+// ownedChat() hits the DB on every message request — cache for 5 minutes
+// to eliminate ~700ms on the hot path. Chat metadata rarely changes mid-conversation.
+type CachedChat = { id: string; userId: string; title: string; selectedProvider: string; selectedModel: string };
+const chatOwnershipCache = new Map<string, { chat: CachedChat; expiry: number }>();
+const CHAT_CACHE_TTL = 300_000; // 5 minutes
+
+function getCachedChat(chatId: string, userId: string): CachedChat | null {
+  const entry = chatOwnershipCache.get(`${chatId}:${userId}`);
+  if (entry && entry.expiry > Date.now()) return entry.chat;
+  chatOwnershipCache.delete(`${chatId}:${userId}`);
+  return null;
+}
+
+function setCachedChat(chat: CachedChat): void {
+  chatOwnershipCache.set(`${chat.id}:${chat.userId}`, {
+    chat,
+    expiry: Date.now() + CHAT_CACHE_TTL,
+  });
+}
+
+function invalidateCachedChat(chatId: string, userId: string): void {
+  chatOwnershipCache.delete(`${chatId}:${userId}`);
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of chatOwnershipCache) {
+    if (entry.expiry <= now) chatOwnershipCache.delete(key);
+  }
+}, 120_000).unref();
+
 // ── Image intent detection ─────────────────────────────────────────────────
 // Detects when a user's message is asking for image generation.
 // When detected (and the provider supports images), we auto-route to
@@ -50,11 +82,16 @@ function getUser(req: Request): AuthUser {
 }
 
 async function ownedChat(chatId: string, userId: string) {
+  // Check cache first — eliminates ~700ms DB query on every message request
+  const cached = getCachedChat(chatId, userId);
+  if (cached) return cached;
+
   const [c] = await db
     .select()
     .from(schema.chat)
     .where(and(eq(schema.chat.id, chatId), eq(schema.chat.userId, userId)))
     .limit(1);
+  if (c) setCachedChat(c);
   return c ?? null;
 }
 

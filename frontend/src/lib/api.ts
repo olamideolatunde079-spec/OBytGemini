@@ -31,10 +31,14 @@ export async function fetchConfig(): Promise<AppConfig> {
   return fetchJSON<AppConfig>(`${BASE}/config`);
 }
 
-// ── Models ────────────────────────────────────────────────────────────────────
+// ── Models — cached in memory ────────────────────────────────────────────────
+let _modelsCache: ModelInfo[] | null = null;
+
 export async function fetchModels(): Promise<ModelInfo[]> {
+  if (_modelsCache) return _modelsCache;
   const data = await fetchJSON<{ models: ModelInfo[] }>(`${BASE}/models`);
-  return data.models;
+  _modelsCache = data.models;
+  return _modelsCache;
 }
 
 // ── Chats ─────────────────────────────────────────────────────────────────────

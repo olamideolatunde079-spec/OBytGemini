@@ -26,11 +26,11 @@ export default function ChatPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  /* ── model state ── */
+  /* ── model state — start with working defaults immediately ── */
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [provider, setProvider] = useState("google");
-  const [model, setModel] = useState("gemini-3.5-flash");
+  const [provider, setProvider] = useState("groq");           // fastest verified provider
+  const [model, setModel] = useState("openai/gpt-oss-20b");  // fastest verified model
   const [loadingModels, setLoadingModels] = useState(true);
   const prefLoadedRef = useRef(false);
 
@@ -52,36 +52,44 @@ export default function ChatPage() {
   const chatLoadedRef = useRef(false);
   const retainErrorRef = useRef(false);
 
-  /* ── load models + preferences + config ── */
+  /* ── load models + preferences + config in background ── */
+  /* The composer is NOT disabled during this load — defaults above work immediately */
   useEffect(() => {
     let active = true;
-    Promise.all([
-      fetchModels(),
-      fetchConfig().catch(() => null),
-      fetchPreferences().catch(() => null),
-    ]).then(([list, config, pref]) => {
+    // Load models first (fast, no DB)
+    fetchModels().then(list => {
       if (!active) return;
       setModels(list);
       setLoadingModels(false);
+      // Update provider/model only if user hasn't changed it and chat isn't loaded
       if (chatLoadedRef.current) return;
-      if (pref?.preferredProvider && pref?.preferredModel) {
-        const exists = list.some(m => m.provider === pref.preferredProvider && m.model === pref.preferredModel);
-        if (exists) {
-          setProvider(pref.preferredProvider);
-          setModel(pref.preferredModel);
-          prefLoadedRef.current = true;
-          return;
-        }
-      }
-      if (config?.defaults?.provider && config?.defaults?.model) {
-        const ok = list.some(m => m.provider === config.defaults.provider && m.model === config.defaults.model && m.available);
-        if (ok) { setProvider(config.defaults.provider); setModel(config.defaults.model); return; }
-      }
+      if (prefLoadedRef.current) return;
       const first = list.find(m => m.available);
       if (first) { setProvider(first.provider); setModel(first.model); }
     }).catch((err: Error) => {
       if (active) { setModelsError(`Could not load models: ${err.message}`); setLoadingModels(false); }
     });
+
+    // Load config + preferences in background (don't block UI)
+    Promise.all([
+      fetchConfig().catch(() => null),
+      fetchPreferences().catch(() => null),
+    ]).then(([config, pref]) => {
+      if (!active || chatLoadedRef.current) return;
+      // Apply saved preference if available
+      if (pref?.preferredProvider && pref?.preferredModel) {
+        prefLoadedRef.current = true;
+        setProvider(pref.preferredProvider);
+        setModel(pref.preferredModel);
+        return;
+      }
+      // Apply server default
+      if (config?.defaults?.provider && config?.defaults?.model) {
+        setProvider(config.defaults.provider);
+        setModel(config.defaults.model);
+      }
+    }).catch(() => {});
+
     return () => { active = false; };
   }, []);
 
@@ -236,15 +244,17 @@ export default function ChatPage() {
 
   const isNewChat = !chatId;
   const hasMessages = messages.length > 0;
-  const selectedAvailable = models.some(m => m.available && m.provider === provider && m.model === model);
+  // Only disable if actively loading a CHAT, not while models load in background
+  const selectedAvailable = models.length === 0
+    ? true  // models not loaded yet — allow typing, validate on send
+    : models.some(m => m.available && m.provider === provider && m.model === model);
 
-  const availabilityError = loadingModels ? null :
-    modelsError ?? (
-      models.length === 0 ? "No models registered. Check the backend." :
-      !models.some(m => m.available) ? "No AI provider configured. Add an API key to backend/.env." :
-      !selectedAvailable ? `${provider} is not available. Update GEMINI_API_KEY in backend/.env or switch to another model.` :
-      null
-    );
+  const availabilityError = (!loadingModels && models.length > 0) ? (
+    modelsError ??
+    (!models.some(m => m.available)
+      ? "No AI provider configured. Add an API key to backend/.env."
+      : null)
+  ) : null;
   const visibleError = error ?? availabilityError;
 
   const streamingMsg: Message | null = generating && streamingText
@@ -376,7 +386,7 @@ export default function ChatPage() {
           attachment={attachment}
           onAttachmentChange={setAttachment}
           canAttachImages={VISION_PROVIDERS.has(provider) && selectedAvailable}
-          disabled={loadingChat || loadingModels || !selectedAvailable}
+          disabled={loadingChat}  // only disable while loading an existing chat
         />
       </div>
     </div>
