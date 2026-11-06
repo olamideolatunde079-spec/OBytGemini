@@ -5,44 +5,24 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faCopy, faCheck, faDownload, faExpand, faXmark,
-  faUser, faRotateRight, faFilePdf, faFileLines,
+  faCopy,
+  faCheck,
+  faDownload,
+  faExpand,
+  faXmark,
+  faUser,
+  faRotateRight,
+  faVolumeHigh,
+  faStop,
+  faThumbsUp,
+  faThumbsDown,
+  faBookmark,
 } from "@fortawesome/free-solid-svg-icons";
+import { createLibraryItem } from "../lib/api.js";
 import type { Message } from "../types/index.js";
 import type { Components } from "react-markdown";
 
-/* ── File download helpers ─────────────────────────────────────────────── */
-function downloadBlob(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadAsPDF(html: string, title: string) {
-  // Use the browser's print-to-PDF capability
-  const w = window.open("", "_blank");
-  if (!w) return;
-  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
-  <style>
-    body { font-family: -apple-system, "Segoe UI", sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; color: #1f2937; }
-    pre { background: #f3f4f6; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
-    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-    table { border-collapse: collapse; width: 100%; margin: 16px 0; }
-    th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-    th { background: #f9fafb; font-weight: 600; }
-    h1 { font-size: 1.5em; } h2 { font-size: 1.25em; } h3 { font-size: 1.1em; }
-    @media print { body { margin: 0; } }
-  </style></head><body>${html}</body></html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(() => { w.print(); }, 500);
-}
-
-/* ── sanitize: allow code highlight classes ── */
+/* Sanitize schema allowing hljs code highlighting */
 const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
@@ -53,18 +33,16 @@ const sanitizeSchema = {
   },
 };
 
-/* ── safe external link ── */
+/* Safe external links */
 function SafeLink({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   if (!href) return <span>{children}</span>;
-  const safe = href.startsWith("http://") || href.startsWith("https://") || href.startsWith("/");
-  if (!safe) return <span style={{ color: "var(--text-muted)" }}>{children}</span>;
-  const ext = href.startsWith("http");
+  const isExternal = href.startsWith("http");
   return (
     <a
       href={href}
-      target={ext ? "_blank" : undefined}
-      rel={ext ? "noopener noreferrer" : undefined}
-      style={{ color: "var(--brand-1)", textDecoration: "underline", textUnderlineOffset: 2 }}
+      target={isExternal ? "_blank" : undefined}
+      rel={isExternal ? "noopener noreferrer" : undefined}
+      className="text-[#8AB4F8] underline underline-offset-2 hover:text-[#A8C7FA]"
       {...rest}
     >
       {children}
@@ -72,44 +50,48 @@ function SafeLink({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAn
   );
 }
 
-/* ── code block with copy button ── */
+/* Code block with syntax highlight and copy code button */
 function CodeBlock({ children, className }: { children?: React.ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false);
   const text = typeof children === "string" ? children : String(children ?? "");
-  const copy = async () => {
+
+  const handleCopy = async () => {
     await navigator.clipboard.writeText(text.trimEnd());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
   return (
-    <div className="relative group/code">
-      <button
-        onClick={copy}
-        className="absolute top-2 right-2 opacity-0 group-hover/code:opacity-100 px-2 py-1 rounded-lg text-xs flex items-center gap-1 transition-all"
-        style={{ background: "rgba(255,255,255,0.1)", color: "#ccc" }}
-        aria-label="Copy code"
-      >
-        <FontAwesomeIcon icon={copied ? faCheck : faCopy} className="w-3 h-3" />
-        {copied ? "Copied" : "Copy"}
-      </button>
-      <code className={className}>{children}</code>
+    <div className="relative group/code my-3 rounded-xl overflow-hidden border border-white/10 bg-[#16171a]">
+      <div className="flex items-center justify-between px-4 py-1.5 border-b border-white/5 bg-white/5 text-xs text-gray-400">
+        <span className="font-mono text-[11px]">{className?.replace("language-", "") || "code"}</span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+          aria-label="Copy code"
+        >
+          <FontAwesomeIcon icon={copied ? faCheck : faCopy} className="w-3 h-3" />
+          <span>{copied ? "Copied" : "Copy"}</span>
+        </button>
+      </div>
+      <div className="p-4 overflow-x-auto text-xs leading-relaxed font-mono">
+        <code className={className}>{children}</code>
+      </div>
     </div>
   );
 }
 
-/* ── image lightbox ── */
+/* Lightbox Modal for Image Fullscreen */
 function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.85)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <button
-        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center text-white"
-        style={{ background: "rgba(255,255,255,0.15)" }}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center text-white bg-white/10 hover:bg-white/20 transition-colors"
         onClick={onClose}
         aria-label="Close"
       >
@@ -118,8 +100,8 @@ function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: ()
       <img
         src={src}
         alt={alt}
-        className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl"
-        onClick={e => e.stopPropagation()}
+        className="max-w-full max-h-[90vh] rounded-2xl shadow-2xl object-contain"
+        onClick={(e) => e.stopPropagation()}
       />
     </div>
   );
@@ -127,37 +109,69 @@ function Lightbox({ src, alt, onClose }: { src: string; alt: string; onClose: ()
 
 const mdComponents: Components = {
   a: SafeLink as Components["a"],
-  pre: ({ children }) => <pre className="not-prose">{children}</pre>,
+  pre: ({ children }) => <div className="not-prose">{children}</div>,
   code: ({ className, children }) => {
-    if (className?.includes("language-")) return <CodeBlock className={className}>{children}</CodeBlock>;
+    if (className?.includes("language-")) {
+      return <CodeBlock className={className}>{children}</CodeBlock>;
+    }
     return <code className={className}>{children}</code>;
   },
 };
 
-/* ── provider label shortener ── */
-function providerLabel(provider?: string | null, model?: string | null) {
-  if (!provider) return null;
-  const pmap: Record<string, string> = { google: "Gemini", openai: "GPT", groq: "Groq", anthropic: "Claude", deepseek: "DeepSeek" };
-  const pName = pmap[provider] ?? provider;
-  const mShort = model?.split("/").pop()?.split("-").slice(0, 3).join("-") ?? "";
-  return `${pName} · ${mShort}`;
-}
-
-interface Props {
+interface MessageBubbleProps {
   message: Message;
   streaming?: boolean;
   onRegenerate?: () => void;
 }
 
-export default function MessageBubble({ message, streaming, onRegenerate }: Props) {
+export default function MessageBubble({ message, streaming, onRegenerate }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [lightbox, setLightbox] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
+
   const isUser = message.role === "user";
 
   const copyResponse = async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  /* Text to Speech */
+  const toggleSpeech = () => {
+    if (!window.speechSynthesis) return;
+
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    } else {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(message.content);
+      utterance.rate = 1.0;
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+      setIsSpeaking(true);
+    }
+  };
+
+  /* Save to Library */
+  const handleSaveToLibrary = async () => {
+    try {
+      await createLibraryItem({
+        title: message.content.slice(0, 50).trim() || "Saved AI Response",
+        type: message.imageDataUrl ? "image" : "document",
+        content: message.content,
+        previewUrl: message.imageDataUrl || undefined,
+        tags: ["chat", message.model || "gemini"],
+      });
+      setSavedToLibrary(true);
+      setTimeout(() => setSavedToLibrary(false), 3000);
+    } catch {
+      // ignore
+    }
   };
 
   const downloadImage = useCallback(() => {
@@ -172,71 +186,72 @@ export default function MessageBubble({ message, streaming, onRegenerate }: Prop
   return (
     <>
       {lightbox && message.imageDataUrl && (
-        <Lightbox src={message.imageDataUrl} alt={message.content || "Generated image"} onClose={() => setLightbox(false)} />
+        <Lightbox
+          src={message.imageDataUrl}
+          alt={message.content || "Generated image"}
+          onClose={() => setLightbox(false)}
+        />
       )}
 
-      <div className={`flex gap-3 group py-1 ${isUser ? "justify-end" : "justify-start"}`}>
-
-        {/* ── AI avatar: OBytGemini logo ── */}
+      <div className={`flex gap-3 group py-3 ${isUser ? "justify-end" : "justify-start"}`}>
+        {/* Assistant Avatar: OBytGemini logo */}
         {!isUser && (
-          <div className="flex-shrink-0 mt-0.5">
+          <div className="shrink-0 mt-0.5">
             <img
               src="/images/obytgemini-logo.png"
               alt="OBytGemini"
-              className="w-8 h-8 rounded-full object-contain"
-              style={{ background: "linear-gradient(135deg, #e8eeff, #f0e8ff)", padding: 2 }}
+              className="w-7 h-7 rounded-full object-contain p-0.5 bg-gradient-to-tr from-blue-500/20 to-purple-500/20 border border-white/10"
             />
           </div>
         )}
 
-        <div className={`flex flex-col gap-1 min-w-0 ${isUser ? "items-end max-w-[80%]" : "items-start flex-1"}`}>
-
-          {/* attachment preview above user bubble */}
+        <div className={`flex flex-col gap-1 min-w-0 ${isUser ? "items-end max-w-[85%]" : "items-start flex-1"}`}>
+          {/* Attached image preview on user turn */}
           {isUser && message.attachmentDataUrl && (
             <img
               src={message.attachmentDataUrl}
-              alt="Attached"
-              className="max-w-xs rounded-2xl mb-1"
-              style={{ border: "1px solid var(--border)" }}
+              alt="Attached preview"
+              className="max-w-xs rounded-2xl mb-1.5 border border-white/10 shadow-sm"
             />
           )}
 
-          {/* ── bubble ── */}
+          {/* Message Content Container */}
           <div
-            className="px-4 py-3 rounded-2xl text-sm leading-relaxed"
-            style={isUser ? {
-              background: "var(--bg-hover)",
-              color: "var(--text-primary)",
-              borderRadius: "18px 18px 4px 18px",
-              maxWidth: "100%",
-            } : {
-              background: "transparent",
-              color: "var(--text-primary)",
-              width: "100%",
-            }}
+            className={`
+              text-sm leading-relaxed
+              ${
+                isUser
+                  ? "px-4 py-2.5 rounded-2xl bg-[var(--bg-hover)] text-[var(--text-primary)]"
+                  : "w-full text-[var(--text-primary)] py-1"
+              }
+            `}
           >
             {message.imageDataUrl ? (
-              /* generated image */
               <div className="space-y-2">
-                <div className="relative group/img cursor-pointer" onClick={() => setLightbox(true)}>
+                <div
+                  className="relative group/img cursor-pointer inline-block"
+                  onClick={() => setLightbox(true)}
+                >
                   <img
                     src={message.imageDataUrl}
-                    alt={message.content || "Generated image"}
-                    className="max-w-sm rounded-2xl"
-                    style={{ border: "1px solid var(--border)" }}
+                    alt={message.content || "Generated"}
+                    className="max-w-md rounded-2xl border border-white/10 shadow-lg"
                   />
-                  <div
-                    className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity rounded-2xl"
-                    style={{ background: "rgba(0,0,0,0.25)" }}
-                  >
-                    <FontAwesomeIcon icon={faExpand} className="w-7 h-7 text-white drop-shadow" />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity rounded-2xl bg-black/40">
+                    <FontAwesomeIcon icon={faExpand} className="w-6 h-6 text-white drop-shadow" />
                   </div>
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setLightbox(true)} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--brand-1)" }}>
+                <div className="flex gap-4 pt-1">
+                  <button
+                    onClick={() => setLightbox(true)}
+                    className="flex items-center gap-1.5 text-xs text-[#8AB4F8] hover:underline"
+                  >
                     <FontAwesomeIcon icon={faExpand} className="w-3 h-3" /> View full size
                   </button>
-                  <button onClick={downloadImage} className="flex items-center gap-1.5 text-xs" style={{ color: "var(--brand-1)" }}>
+                  <button
+                    onClick={downloadImage}
+                    className="flex items-center gap-1.5 text-xs text-[#8AB4F8] hover:underline"
+                  >
                     <FontAwesomeIcon icon={faDownload} className="w-3 h-3" /> Download
                   </button>
                 </div>
@@ -257,97 +272,88 @@ export default function MessageBubble({ message, streaming, onRegenerate }: Prop
             )}
           </div>
 
-          {/* ── AI meta row ── */}
+          {/* Assistant Action Buttons */}
           {!isUser && !streaming && (
-            <div className="flex items-center gap-3 px-1 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5">
-              {message.provider && (
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  {providerLabel(message.provider, message.model)}
-                </span>
-              )}
+            <div className="flex items-center gap-3 pt-2 text-xs text-[var(--text-muted)] opacity-80 group-hover:opacity-100 transition-opacity">
+              {/* Copy */}
               <button
                 onClick={copyResponse}
-                className="flex items-center gap-1.5 text-xs transition-colors"
-                style={{ color: "var(--text-muted)" }}
-                onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
-                onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
+                className="flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1"
                 title="Copy response"
+                aria-label="Copy response"
               >
-                <FontAwesomeIcon icon={copied ? faCheck : faCopy} className={`w-3.5 h-3.5 ${copied ? "text-green-500" : ""}`} />
-                {copied ? "Copied" : "Copy"}
+                <FontAwesomeIcon icon={copied ? faCheck : faCopy} className={copied ? "text-green-400" : ""} />
+                <span>{copied ? "Copied" : "Copy"}</span>
               </button>
+
+              {/* Read Aloud (Text to Speech) */}
+              <button
+                onClick={toggleSpeech}
+                className={`flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1 ${
+                  isSpeaking ? "text-[#8AB4F8] font-medium" : ""
+                }`}
+                title={isSpeaking ? "Stop reading" : "Read aloud"}
+                aria-label="Read aloud"
+              >
+                <FontAwesomeIcon icon={isSpeaking ? faStop : faVolumeHigh} />
+                <span>{isSpeaking ? "Stop" : "Read aloud"}</span>
+              </button>
+
+              {/* Regenerate */}
               {onRegenerate && (
                 <button
                   onClick={onRegenerate}
-                  className="flex items-center gap-1.5 text-xs transition-colors"
-                  style={{ color: "var(--text-muted)" }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
-                  title="Regenerate response"
+                  className="flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1"
+                  title="Regenerate"
+                  aria-label="Regenerate"
                 >
-                  <FontAwesomeIcon icon={faRotateRight} className="w-3.5 h-3.5" />
-                  Regenerate
+                  <FontAwesomeIcon icon={faRotateRight} />
+                  <span>Regenerate</span>
                 </button>
               )}
-              {/* ── File download buttons ── */}
-              {!message.imageDataUrl && (
-                <>
-                  <button
-                    onClick={() => downloadBlob(message.content, `obytgemini-${Date.now()}.txt`, "text/plain")}
-                    className="flex items-center gap-1.5 text-xs transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
-                    title="Download as TXT"
-                  >
-                    <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5" />
-                    TXT
-                  </button>
-                  <button
-                    onClick={() => downloadBlob(message.content, `obytgemini-${Date.now()}.md`, "text/markdown")}
-                    className="flex items-center gap-1.5 text-xs transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
-                    title="Download as Markdown"
-                  >
-                    <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5" />
-                    MD
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Convert markdown to simple HTML for PDF printing
-                      const html = message.content
-                        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-                        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-                        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-                        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/`(.+?)`/g, '<code>$1</code>')
-                        .replace(/\n/g, '<br>');
-                      downloadAsPDF(html, "OBytGemini Response");
-                    }}
-                    className="flex items-center gap-1.5 text-xs transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                    onMouseEnter={e => (e.currentTarget.style.color = "var(--text-primary)")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}
-                    title="Download as PDF"
-                  >
-                    <FontAwesomeIcon icon={faFilePdf} className="w-3.5 h-3.5" />
-                    PDF
-                  </button>
-                </>
-              )}
+
+              {/* Thumbs Up / Down */}
+              <button
+                onClick={() => setFeedback(feedback === "up" ? null : "up")}
+                className={`p-1 hover:text-[var(--text-primary)] transition-colors ${
+                  feedback === "up" ? "text-green-400" : ""
+                }`}
+                title="Good response"
+                aria-label="Thumbs up"
+              >
+                <FontAwesomeIcon icon={faThumbsUp} />
+              </button>
+              <button
+                onClick={() => setFeedback(feedback === "down" ? null : "down")}
+                className={`p-1 hover:text-[var(--text-primary)] transition-colors ${
+                  feedback === "down" ? "text-red-400" : ""
+                }`}
+                title="Bad response"
+                aria-label="Thumbs down"
+              >
+                <FontAwesomeIcon icon={faThumbsDown} />
+              </button>
+
+              {/* Save to Library */}
+              <button
+                onClick={handleSaveToLibrary}
+                className={`flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1 ${
+                  savedToLibrary ? "text-[#8AB4F8]" : ""
+                }`}
+                title="Save to Library"
+                aria-label="Save to Library"
+              >
+                <FontAwesomeIcon icon={faBookmark} />
+                <span>{savedToLibrary ? "Saved" : "Save"}</span>
+              </button>
             </div>
           )}
         </div>
 
-        {/* ── user avatar: clean icon (no letter U) ── */}
+        {/* User Avatar */}
         {isUser && (
-          <div
-            className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5"
-            style={{ background: "var(--bg-hover)" }}
-          >
-            <FontAwesomeIcon icon={faUser} className="w-3.5 h-3.5" style={{ color: "var(--text-secondary)" }} />
+          <div className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5 bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-white/10">
+            <FontAwesomeIcon icon={faUser} className="w-3 h-3" />
           </div>
         )}
       </div>

@@ -77,3 +77,51 @@ export interface ResearchResult {
   sources: ResearchSource[];
   disclaimer: string;
 }
+
+export interface Notebook {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduledTask {
+  id: string;
+  userId: string;
+  title: string;
+  prompt: string;
+  model: string;
+  frequency: "daily" | "weekly" | "once" | "hourly";
+  timeOfDay: string;
+  status: "active" | "paused";
+  lastRunAt?: string | null;
+  nextRunAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LibraryItem {
+  id: string;
+  userId: string;
+  title: string;
+  type: "image" | "document" | "code" | "prompt" | "note";
+  content: string;
+  previewUrl?: string | null;
+  tags: string[];
+  createdAt: string;
+}
+
+export interface StudyFlashcard {
+  question: string;
+  answer: string;
+}
+
+export interface StudyQuizQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}

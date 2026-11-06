@@ -6,6 +6,9 @@ import type {
   Memory,
   AppConfig,
   ResearchResult,
+  Notebook,
+  ScheduledTask,
+  LibraryItem,
 } from "../types/index.js";
 
 const BASE = "/api";
@@ -231,3 +234,113 @@ export async function* sendMessage(
     reader.releaseLock();
   }
 }
+
+// ── Notebooks ─────────────────────────────────────────────────────────────────
+export async function fetchNotebooks(): Promise<Notebook[]> {
+  const data = await fetchJSON<{ notebooks: Notebook[] }>(`${BASE}/notebooks`);
+  return data.notebooks;
+}
+
+export async function createNotebook(params: { title?: string; content?: string; color?: string }): Promise<Notebook> {
+  const data = await fetchJSON<{ notebook: Notebook }>(`${BASE}/notebooks`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  return data.notebook;
+}
+
+export async function fetchNotebook(id: string): Promise<Notebook> {
+  const data = await fetchJSON<{ notebook: Notebook }>(`${BASE}/notebooks/${id}`);
+  return data.notebook;
+}
+
+export async function updateNotebook(id: string, updates: Partial<Pick<Notebook, "title" | "content" | "color">>): Promise<Notebook> {
+  const data = await fetchJSON<{ notebook: Notebook }>(`${BASE}/notebooks/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+  return data.notebook;
+}
+
+export async function deleteNotebook(id: string): Promise<void> {
+  await fetchJSON(`${BASE}/notebooks/${id}`, { method: "DELETE" });
+}
+
+// ── Scheduled Tasks ───────────────────────────────────────────────────────────
+export async function fetchScheduledTasks(): Promise<ScheduledTask[]> {
+  const data = await fetchJSON<{ tasks: ScheduledTask[] }>(`${BASE}/scheduled`);
+  return data.tasks;
+}
+
+export async function createScheduledTask(params: {
+  title: string;
+  prompt: string;
+  model?: string;
+  frequency?: ScheduledTask["frequency"];
+  timeOfDay?: string;
+}): Promise<ScheduledTask> {
+  const data = await fetchJSON<{ task: ScheduledTask }>(`${BASE}/scheduled`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  return data.task;
+}
+
+export async function updateScheduledTask(
+  id: string,
+  updates: Partial<Pick<ScheduledTask, "title" | "prompt" | "model" | "frequency" | "timeOfDay" | "status">>
+): Promise<ScheduledTask> {
+  const data = await fetchJSON<{ task: ScheduledTask }>(`${BASE}/scheduled/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+  return data.task;
+}
+
+export async function runScheduledTask(id: string): Promise<{ success: boolean; result: string }> {
+  return fetchJSON<{ success: boolean; result: string }>(`${BASE}/scheduled/${id}/run`, {
+    method: "POST",
+  });
+}
+
+export async function deleteScheduledTask(id: string): Promise<void> {
+  await fetchJSON(`${BASE}/scheduled/${id}`, { method: "DELETE" });
+}
+
+// ── Library ───────────────────────────────────────────────────────────────────
+export async function fetchLibraryItems(type?: string): Promise<LibraryItem[]> {
+  const url = type ? `${BASE}/library?type=${encodeURIComponent(type)}` : `${BASE}/library`;
+  const data = await fetchJSON<{ items: LibraryItem[] }>(url);
+  return data.items;
+}
+
+export async function createLibraryItem(params: {
+  title: string;
+  type: LibraryItem["type"];
+  content: string;
+  previewUrl?: string;
+  tags?: string[];
+}): Promise<LibraryItem> {
+  const data = await fetchJSON<{ item: LibraryItem }>(`${BASE}/library`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  return data.item;
+}
+
+export async function deleteLibraryItem(id: string): Promise<void> {
+  await fetchJSON(`${BASE}/library/${id}`, { method: "DELETE" });
+}
+
+// ── Study Tools ───────────────────────────────────────────────────────────────
+export async function generateStudyContent(params: {
+  action: "explain" | "flashcards" | "quiz" | "summary";
+  topic: string;
+  difficulty?: "beginner" | "intermediate" | "advanced";
+}): Promise<any> {
+  return fetchJSON(`${BASE}/study/generate`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+

@@ -273,12 +273,12 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   const modelId = parsed.data.model ?? chatRecord.selectedModel;
 
   let aiModel;
+  let providerMissingMessage: string | null = null;
   try {
     aiModel = getModel(provider, modelId);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Invalid model selection";
-    res.status(400).json({ error: message });
-    return;
+    providerMissingMessage =
+      err instanceof Error ? err.message : "Provider API key is not configured.";
   }
 
   // ── Parallel: fetch history + memories simultaneously ────────────────────
@@ -341,6 +341,15 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   const sendEvent = (event: object) => {
     if (!res.destroyed) res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
+
+  if (!aiModel && providerMissingMessage) {
+    sendEvent({
+      chunk: `👋 **Welcome to OBytGemini!**\n\n${providerMissingMessage}\n\nTo enable live AI generation, configure your API key in the environment:\n- \`GEMINI_API_KEY\` for Google Gemini models (Gemini 3.5 Flash, Gemini 3.8 Flash)\n- \`GROQ_API_KEY\` for Groq models\n- \`OPENAI_API_KEY\` for OpenAI models\n- \`ANTHROPIC_API_KEY\` for Claude models\n`,
+    });
+    sendEvent({ done: true, provider, model: modelId });
+    res.end();
+    return;
+  }
 
   // ── Auto image generation ─────────────────────────────────────────────
   // If the user's message looks like an image request and the selected

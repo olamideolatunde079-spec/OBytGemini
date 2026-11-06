@@ -1,106 +1,113 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faPenToSquare, faCode, faBook, faLightbulb,
-  faFlask, faImage,
+  faComments,
+  faWrench,
 } from "@fortawesome/free-solid-svg-icons";
-import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import SparkleIcon from "./SparkleIcon.js";
+import PromptComposer from "./PromptComposer.js";
+import type { ModelInfo } from "../types/index.js";
 
-const SUGGESTIONS: { icon: IconDefinition; label: string; prompt: string }[] = [
-  { icon: faPenToSquare, label: "Write",       prompt: "Help me write a professional email to my team." },
-  { icon: faCode,        label: "Code",        prompt: "Explain how async/await works in JavaScript with examples." },
-  { icon: faBook,        label: "Learn",       prompt: "What are the key differences between React and Vue?" },
-  { icon: faLightbulb,   label: "Brainstorm",  prompt: "Give me 5 creative side project ideas using AI." },
-  { icon: faFlask,       label: "Research",    prompt: "What are the latest developments in quantum computing?" },
-  { icon: faImage,       label: "Create image", prompt: "A futuristic city at sunset with flying cars" },
-];
-
-interface Props {
-  onPrompt: (p: string) => void;
-  userName?: string;
+interface WelcomeScreenProps {
+  onPrompt: (promptText: string) => void;
+  input: string;
+  setInput: (v: string) => void;
+  onSubmit: () => void;
+  loading: boolean;
+  models: ModelInfo[];
+  provider: string;
+  model: string;
+  onModelChange: (p: string, m: string) => void;
+  attachment: any;
+  onAttachmentChange: (a: any) => void;
 }
 
-export default function WelcomeScreen({ onPrompt, userName }: Props) {
-  const first = userName ? userName.split(" ")[0] : null;
+export default function WelcomeScreen({
+  onPrompt,
+  input,
+  setInput,
+  onSubmit,
+  loading,
+  models,
+  provider,
+  model,
+  onModelChange,
+  attachment,
+  onAttachmentChange,
+}: WelcomeScreenProps) {
+  const suggestions = [
+    {
+      isSparkle: true,
+      iconColor: "#8AB4F8",
+      label: "Design a phone wallpaper for me",
+      prompt: "Design a phone wallpaper for me. Create an aesthetic, modern vertical wallpaper concept with minimalist geometric composition and soothing gradients.",
+    },
+    {
+      icon: faComments,
+      iconColor: "#AEB4BE",
+      label: "Walk me through a hard conversation",
+      prompt: "Walk me through a hard conversation. How do I give constructive, sensitive feedback to a colleague while keeping our working relationship positive?",
+    },
+    {
+      icon: faWrench,
+      iconColor: "#AEB4BE",
+      label: "Help me free up phone storage",
+      prompt: "Help me free up phone storage. Give me step-by-step practical tips for clearing cache, duplicate photos, offloading apps, and cleaning up space safely.",
+    },
+  ];
 
   return (
-    <div className="flex flex-col items-center justify-start flex-1 w-full overflow-y-auto px-4 pt-10 pb-6 relative">
-
-      {/* ── animated background logo ── */}
+    <div className="relative flex-1 flex flex-col items-center justify-center w-full px-4 min-h-[500px]">
+      {/* Background Ambient Glow */}
       <div
-        className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+        className="absolute inset-0 pointer-events-none gemini-ambient-glow z-0"
         aria-hidden="true"
-        style={{ top: 0, zIndex: 0 }}
-      >
-        {/* glow blob behind the logo */}
-        <div
-          className="obyt-glow-blob absolute w-72 h-72 rounded-full"
-          style={{
-            background: "radial-gradient(circle, var(--brand-1) 0%, var(--brand-2) 60%, transparent 80%)",
-            opacity: 0.12,
-          }}
-        />
-        {/* the actual logo symbol */}
-        <img
-          src="/images/obytgemini-logo.png"
-          alt=""
-          className="obyt-logo-float"
-          style={{
-            width: 220,
-            height: 220,
-            objectFit: "contain",
-            opacity: 0.08,
-            filter: "saturate(1.5)",
-          }}
-        />
-      </div>
+      />
 
-      {/* ── foreground content ── */}
-      <div className="relative z-10 flex flex-col items-center w-full max-w-2xl">
-
-        {/* greeting */}
-        <h1
-          className="obyt-fade-in text-3xl md:text-4xl font-semibold text-center mt-4 mb-2"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {first ? `Hello, ${first}` : "Hello"}
+      {/* Main Centered Content */}
+      <div className="relative z-10 flex flex-col items-center w-full max-w-2xl text-center">
+        {/* Heading */}
+        <h1 className="text-3xl sm:text-4xl md:text-[42px] font-normal tracking-tight text-[var(--text-primary)] mb-8 select-none">
+          Where should we start?
         </h1>
-        <p
-          className="obyt-fade-in-delay-1 text-xl md:text-2xl font-normal text-center mb-10"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          How can I help you today?
-        </p>
 
-        {/* suggestion chips */}
-        <div className="obyt-fade-in-delay-2 grid grid-cols-2 md:grid-cols-3 gap-3 w-full mb-8">
-          {SUGGESTIONS.map(({ icon, label, prompt }) => (
+        {/* Embedded Composer in Center */}
+        <div className="w-full mb-7">
+          <PromptComposer
+            value={input}
+            onChange={setInput}
+            onSubmit={onSubmit}
+            loading={loading}
+            models={models}
+            provider={provider}
+            model={model}
+            onModelChange={onModelChange}
+            attachment={attachment}
+            onAttachmentChange={onAttachmentChange}
+            placeholder="Ask OBytGemini"
+          />
+        </div>
+
+        {/* Three Contextual Suggestions */}
+        <div className="flex flex-col items-start gap-2.5 w-full max-w-xl mx-auto px-4">
+          {suggestions.map((item, index) => (
             <button
-              key={label}
-              onClick={() => onPrompt(prompt)}
-              className="flex flex-col items-start gap-2 p-4 rounded-2xl text-left transition-all group"
-              style={{
-                background: "var(--bg-surface)",
-                border: "1px solid var(--border)",
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--brand-1)";
-                (e.currentTarget as HTMLElement).style.background = "var(--accent-bg)";
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = "var(--border)";
-                (e.currentTarget as HTMLElement).style.background = "var(--bg-surface)";
-              }}
+              key={index}
+              onClick={() => onPrompt(item.prompt)}
+              className="flex items-center gap-3 w-full py-2 px-3 rounded-full text-left text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer group"
             >
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
-                style={{ background: "var(--accent-bg)" }}
-              >
-                <FontAwesomeIcon icon={icon} className="w-4 h-4" style={{ color: "var(--brand-1)" }} />
-              </div>
-              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{label}</span>
-              <span className="text-xs leading-relaxed line-clamp-2" style={{ color: "var(--text-muted)" }}>
-                {prompt}
-              </span>
+              {"isSparkle" in item && item.isSparkle ? (
+                <SparkleIcon
+                  className="w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110"
+                  style={{ color: item.iconColor }}
+                />
+              ) : (
+                <FontAwesomeIcon
+                  icon={item.icon!}
+                  className="w-3.5 h-3.5 shrink-0 transition-transform group-hover:scale-110"
+                  style={{ color: item.iconColor }}
+                />
+              )}
+              <span className="truncate">{item.label}</span>
             </button>
           ))}
         </div>

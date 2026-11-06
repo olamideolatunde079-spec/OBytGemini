@@ -7,9 +7,9 @@ import { fetchChats } from "../lib/api.js";
 function getSavedTheme(): "light" | "dark" {
   try {
     const t = window.localStorage.getItem("obytgemini-theme");
-    return t === "dark" ? "dark" : "light";
+    return t === "light" ? "light" : "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 
@@ -81,7 +81,7 @@ export default function AppShell() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Outlet context={{ refreshChats, sidebarOpen, onToggleSidebar: () => setSidebarOpen(o => !o) }} />
+        <Outlet context={{ refreshChats, sidebarOpen, onToggleSidebar: () => setSidebarOpen(o => !o), theme, onThemeToggle: toggleTheme }} />
       </main>
     </div>
   );

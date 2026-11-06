@@ -19,7 +19,7 @@ export interface ModelInfo {
 // Both formats are accepted. We detect which to use at runtime.
 function isGeminiKeyConfigured(): boolean {
   const k = process.env.GEMINI_API_KEY?.trim() ?? "";
-  return k.length > 10 && (k.startsWith("AIza") || k.startsWith("AQ.") || k.startsWith("ya29."));
+  return k.length > 5;
 }
 
 // ── Provider error messages ──────────────────────────────────────────────────

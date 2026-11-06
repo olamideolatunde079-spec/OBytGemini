@@ -1,0 +1,7 @@
+{
+  "name": "OBytGemini",
+  "description": "Multi-provider AI assistant for conversations with model switching and web research",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

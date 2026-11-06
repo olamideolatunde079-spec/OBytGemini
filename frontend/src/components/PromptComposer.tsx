@@ -1,16 +1,25 @@
-import { useRef, useEffect, useCallback, type KeyboardEvent } from "react";
+import { useRef, useEffect, useState, useCallback, type KeyboardEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faPaperPlane, faStop, faPaperclip, faXmark,
-  faImage, faComments, faMicrophone,
+  faPlus,
+  faArrowUp,
+  faStop,
+  faXmark,
+  faMicrophone,
+  faImage,
+  faFileLines,
+  faCode,
+  faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
-import ModelSelector from "./ModelSelector.js";
 import type { ModelInfo } from "../types/index.js";
 
-const ACCEPTED = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-const MAX_BYTES = 5 * 1024 * 1024;
+interface AttachmentItem {
+  dataUrl: string;
+  mimeType: string;
+  name?: string;
+}
 
-interface Props {
+interface PromptComposerProps {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
@@ -20,212 +29,393 @@ interface Props {
   provider: string;
   model: string;
   onModelChange: (p: string, m: string) => void;
-  imageMode: boolean;
-  canGenerateImages: boolean;
-  onImageModeChange: (v: boolean) => void;
-  attachment: { dataUrl: string; mimeType: string } | null;
-  onAttachmentChange: (a: { dataUrl: string; mimeType: string } | null) => void;
-  canAttachImages: boolean;
+  attachment: AttachmentItem | null;
+  onAttachmentChange: (a: AttachmentItem | null) => void;
   disabled?: boolean;
+  placeholder?: string;
+  imageMode?: boolean;
+  canGenerateImages?: boolean;
+  onImageModeChange?: (v: boolean) => void;
+  canAttachImages?: boolean;
 }
 
 export default function PromptComposer({
-  value, onChange, onSubmit, onCancel, loading,
-  models, provider, model, onModelChange,
-  imageMode, canGenerateImages, onImageModeChange,
-  attachment, onAttachmentChange, canAttachImages,
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  loading,
+  models,
+  provider,
+  model,
+  onModelChange,
+  attachment,
+  onAttachmentChange,
   disabled,
-}: Props) {
+  placeholder = "Ask OBytGemini",
+}: PromptComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
-  /* auto-resize textarea */
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const recognitionRef = useRef<any>(null);
+
+  /* Auto-resize textarea */
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    ta.style.height = `${Math.min(ta.scrollHeight, 180)}px`;
   }, [value]);
 
-  const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (!loading && (value.trim() || attachment)) onSubmit();
+  /* Speech recognition setup */
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechSupported(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        onChange(value ? `${value} ${transcript}` : transcript);
+      };
+
+      recognition.onerror = () => {
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognitionRef.current = recognition;
+    } catch {
+      setSpeechSupported(false);
+    }
+
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, [onChange, value]);
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) return;
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch {
+        setIsRecording(false);
+      }
     }
   };
 
-  const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  /* Close dropdowns on click outside */
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false);
+      }
+      const target = e.target as HTMLElement;
+      if (!target.closest("#attachment-menu-trigger") && !target.closest("#attachment-menu-dropdown")) {
+        setAttachMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!loading && (value.trim() || attachment)) {
+        onSubmit();
+      }
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    if (!ACCEPTED.includes(file.type)) { alert("Unsupported file type. Use JPEG, PNG, GIF or WebP."); return; }
-    if (file.size > MAX_BYTES) { alert("Image too large (max 5 MB)."); return; }
-    const reader = new FileReader();
-    reader.onload = () => onAttachmentChange({ dataUrl: reader.result as string, mimeType: file.type });
-    reader.readAsDataURL(file);
-  }, [onAttachmentChange]);
 
-  const canSend = (value.trim().length > 0 || attachment !== null) && !disabled;
+    const reader = new FileReader();
+    if (file.type.startsWith("image/")) {
+      reader.onload = () => {
+        onAttachmentChange({
+          dataUrl: reader.result as string,
+          mimeType: file.type,
+          name: file.name,
+        });
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // Document or text or code file
+      reader.onload = () => {
+        const textContent = reader.result as string;
+        const snippet = `\n\n\`\`\`${file.name.split(".").pop() || "txt"}\n// File: ${file.name}\n${textContent.slice(0, 5000)}\n\`\`\``;
+        onChange(value + snippet);
+      };
+      reader.readAsText(file);
+    }
+    setAttachMenuOpen(false);
+  };
+
+  const currentModel = models.find((m) => m.provider === provider && m.model === model);
+  const displayModelName = currentModel?.displayName || "Gemini Auto";
+  const canSend = (value.trim().length > 0 || attachment !== null) && !disabled && !loading;
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 pb-4">
+    <div className="w-full max-w-2xl mx-auto px-4 relative">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
 
-      {/* attachment preview */}
+      {/* Attachment Preview Chip */}
       {attachment && (
-        <div className="mb-2 flex items-start gap-2">
-          <div className="relative inline-block">
-            <img
-              src={attachment.dataUrl}
-              alt="Attachment"
-              className="h-20 w-auto rounded-xl object-cover"
-              style={{ border: "1px solid var(--border)" }}
-            />
+        <div className="mb-2 flex items-center gap-2">
+          <div className="relative inline-flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-[var(--bg-surface-secondary)] border border-white/10 text-xs">
+            {attachment.mimeType.startsWith("image/") ? (
+              <img
+                src={attachment.dataUrl}
+                alt="Upload"
+                className="w-6 h-6 rounded-md object-cover"
+              />
+            ) : (
+              <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5 text-[#8AB4F8]" />
+            )}
+            <span className="text-[var(--text-primary)] max-w-xs truncate">
+              {attachment.name || "Attachment"}
+            </span>
             <button
               onClick={() => onAttachmentChange(null)}
-              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white"
-              style={{ background: "var(--text-secondary)" }}
+              className="ml-1 text-[var(--text-muted)] hover:text-white transition-colors"
               aria-label="Remove attachment"
             >
-              <FontAwesomeIcon icon={faXmark} className="w-2.5 h-2.5" />
+              <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
             </button>
           </div>
         </div>
       )}
 
-      {/* main composer box — Gemini-style rounded container */}
+      {/* Main Pill-Shaped Composer */}
       <div
-        className="rounded-3xl transition-all"
+        className={`
+          flex items-center gap-2 px-3 py-2 rounded-full border transition-all duration-150 shadow-md
+          ${
+            isRecording
+              ? "ring-2 ring-red-500/50 border-red-500"
+              : "border-white/10 hover:border-white/20 focus-within:border-white/25"
+          }
+        `}
         style={{
-          background: "var(--bg-input)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+          background: "var(--bg-surface)",
         }}
-        onFocus={() => {}}
       >
-        {/* textarea */}
+        {/* Left Attachment Button (+) */}
+        <div className="relative">
+          <button
+            id="attachment-menu-trigger"
+            type="button"
+            onClick={() => setAttachMenuOpen((v) => !v)}
+            disabled={loading || disabled}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors shrink-0"
+            title="Attach file or image"
+            aria-label="Add attachment"
+          >
+            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+          </button>
+
+          {/* Attachment Dropdown Menu */}
+          {attachMenuOpen && (
+            <div
+              id="attachment-menu-dropdown"
+              className="absolute left-0 bottom-12 z-50 w-48 rounded-2xl py-1.5 shadow-2xl border border-white/10 backdrop-blur-md"
+              style={{ background: "var(--bg-surface-secondary)" }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.accept = "image/*";
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left"
+              >
+                <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5 text-[#8AB4F8]" />
+                <span>Upload image</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.accept = ".pdf,.doc,.docx,.txt,.md";
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left"
+              >
+                <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5 text-purple-400" />
+                <span>Upload document</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.accept = ".js,.ts,.tsx,.jsx,.py,.html,.css,.json";
+                    fileInputRef.current.click();
+                  }
+                }}
+                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left"
+              >
+                <FontAwesomeIcon icon={faCode} className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Upload code</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Text Input */}
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={handleKey}
-          placeholder={imageMode ? "Describe an image to generate…" : "Message OBytGemini"}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={isRecording ? "Listening to your voice..." : placeholder}
           rows={1}
           disabled={disabled || loading}
-          className="w-full px-5 pt-4 pb-2 text-sm resize-none outline-none bg-transparent leading-relaxed"
-          style={{ color: "var(--text-primary)", minHeight: 52 }}
+          className="flex-1 bg-transparent outline-none resize-none text-sm text-[var(--text-primary)] placeholder-gray-500 py-1.5 px-1 leading-normal max-h-40 min-h-[24px]"
           aria-label="Message input"
         />
 
-        {/* bottom toolbar */}
-        <div className="flex items-center gap-2 px-3 pb-3 pt-1 flex-wrap">
-
-          {/* left tools */}
-          <div className="flex items-center gap-1.5 flex-1 flex-wrap min-w-0">
-
-            {/* attach */}
-            <>
-              <input ref={fileRef} type="file" accept={ACCEPTED.join(",")} className="hidden" onChange={handleFile} />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={loading || disabled || !canAttachImages}
-                title={canAttachImages ? "Attach an image" : "Select Gemini or GPT-4o to attach images"}
-                className="flex items-center justify-center w-9 h-9 rounded-full transition-colors"
-                style={{
-                  color: attachment ? "var(--brand-1)" : "var(--text-muted)",
-                  background: attachment ? "var(--accent-bg)" : "transparent",
-                }}
-                onMouseEnter={e => {
-                  if (!e.currentTarget.disabled)
-                    (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = attachment ? "var(--accent-bg)" : "transparent";
-                }}
-                aria-label="Attach image"
-              >
-                <FontAwesomeIcon icon={faPaperclip} className="w-4 h-4" />
-              </button>
-            </>
-
-            {/* image generation toggle */}
+        {/* Right Section: Model Selector & Actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Model Selector Pill */}
+          <div className="relative" ref={modelMenuRef}>
             <button
               type="button"
-              onClick={() => onImageModeChange(!imageMode)}
-              disabled={loading || (!imageMode && !canGenerateImages)}
-              title={canGenerateImages ? (imageMode ? "Switch to chat" : "Generate an image") : "Select Google or OpenAI for images"}
-              className="flex items-center gap-1.5 px-3 h-8 rounded-full text-xs font-medium transition-colors"
-              style={{
-                background: imageMode ? "var(--accent-bg)" : "var(--bg-hover)",
-                color: imageMode ? "var(--brand-1)" : "var(--text-secondary)",
-                border: imageMode ? "1px solid var(--brand-1)" : "1px solid transparent",
-              }}
-              aria-pressed={imageMode}
+              onClick={() => setModelDropdownOpen((v) => !v)}
+              disabled={loading || disabled}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+              title="Select Model"
             >
-              <FontAwesomeIcon icon={imageMode ? faImage : faComments} className="w-3.5 h-3.5" />
-              <span>{imageMode ? "Image" : "Chat"}</span>
+              <span className="truncate max-w-[120px]">{displayModelName}</span>
+              <FontAwesomeIcon
+                icon={faChevronDown}
+                className={`w-2.5 h-2.5 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`}
+              />
             </button>
 
-            {/* voice — visual only (browser-API placeholder) */}
-            <button
-              type="button"
-              title="Voice input (coming soon)"
-              disabled
-              className="flex items-center justify-center w-9 h-9 rounded-full opacity-40"
-              style={{ color: "var(--text-muted)" }}
-              aria-label="Voice input (not yet available)"
-            >
-              <FontAwesomeIcon icon={faMicrophone} className="w-4 h-4" />
-            </button>
-
-            {/* model selector */}
-            <ModelSelector
-              models={models}
-              provider={provider}
-              model={model}
-              onChange={onModelChange}
-              disabled={loading}
-            />
-          </div>
-
-          {/* right — send / stop */}
-          <div className="flex-shrink-0">
-            {loading ? (
-              <button
-                onClick={onCancel}
-                disabled={!onCancel}
-                className="flex items-center justify-center w-10 h-10 rounded-full transition-colors"
-                style={{ background: "var(--bg-hover)", color: "var(--text-primary)" }}
-                aria-label="Stop generation"
+            {/* Model Dropdown */}
+            {modelDropdownOpen && (
+              <div
+                className="absolute right-0 bottom-12 z-50 w-72 rounded-2xl py-2 shadow-2xl border border-white/10 max-h-80 overflow-y-auto"
+                style={{ background: "var(--bg-surface-secondary)" }}
               >
-                <FontAwesomeIcon icon={faStop} className="w-3.5 h-3.5" />
-              </button>
-            ) : (
-              <button
-                onClick={onSubmit}
-                disabled={!canSend}
-                className="flex items-center justify-center w-10 h-10 rounded-full transition-all"
-                style={{
-                  background: canSend
-                    ? "linear-gradient(135deg, var(--brand-1), var(--brand-2))"
-                    : "var(--bg-hover)",
-                  color: canSend ? "white" : "var(--text-muted)",
-                  opacity: canSend ? 1 : 0.6,
-                }}
-                aria-label="Send message"
-              >
-                <FontAwesomeIcon icon={faPaperPlane} className="w-3.5 h-3.5" />
-              </button>
+                <div className="px-3 py-1 text-xs font-semibold text-[var(--text-muted)] border-b border-white/5 pb-1 mb-1">
+                  Model Selector
+                </div>
+                {models.map((m) => {
+                  const isSelected = m.provider === provider && m.model === model;
+                  return (
+                    <button
+                      key={`${m.provider}/${m.model}`}
+                      type="button"
+                      onClick={() => {
+                        onModelChange(m.provider, m.model);
+                        setModelDropdownOpen(false);
+                      }}
+                      className={`
+                        flex items-center justify-between w-full px-3 py-2 text-xs text-left transition-colors
+                        ${isSelected ? "bg-[var(--accent-bg)] text-[#8AB4F8]" : "text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"}
+                      `}
+                    >
+                      <div className="truncate pr-2">
+                        <div className="font-medium truncate">{m.displayName}</div>
+                        <div className="text-[10px] text-[var(--text-muted)] truncate capitalize">
+                          {m.provider}
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#8AB4F8] shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
+
+          {/* Microphone Button */}
+          {speechSupported && (
+            <button
+              type="button"
+              onClick={toggleRecording}
+              disabled={loading || disabled}
+              className={`
+                w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0
+                ${
+                  isRecording
+                    ? "bg-red-500 text-white animate-pulse"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                }
+              `}
+              title={isRecording ? "Stop recording" : "Voice input (Speech to text)"}
+              aria-label="Microphone"
+            >
+              <FontAwesomeIcon icon={faMicrophone} className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Send or Stop Generation Button */}
+          {loading ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--bg-hover)] text-white hover:bg-white/20 transition-colors shrink-0"
+              title="Stop generation"
+              aria-label="Stop generation"
+            >
+              <FontAwesomeIcon icon={faStop} className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            canSend && (
+              <button
+                type="button"
+                onClick={onSubmit}
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all shrink-0 shadow-sm"
+                title="Send message"
+                aria-label="Send message"
+              >
+                <FontAwesomeIcon icon={faArrowUp} className="w-3.5 h-3.5" />
+              </button>
+            )
+          )}
         </div>
       </div>
-
-      <p className="text-center text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-        {imageMode
-          ? "Image generation · Images are not saved to history"
-          : "Enter to send · Shift+Enter for new line"}
-      </p>
     </div>
   );
 }

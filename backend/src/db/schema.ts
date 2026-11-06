@@ -139,3 +139,61 @@ export const memory = pgTable(
   },
   (t) => [index("memory_userId_idx").on(t.userId)]
 );
+
+// ── Notebooks ─────────────────────────────────────────────────────────────────
+export const notebook = pgTable(
+  "notebook",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("Untitled Notebook"),
+    content: text("content").notNull().default(""),
+    color: text("color").notNull().default("#8AB4F8"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => [index("notebook_userId_idx").on(t.userId)]
+);
+
+// ── Scheduled Prompts & Tasks ────────────────────────────────────────────────
+export const scheduledTask = pgTable(
+  "scheduled_task",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    prompt: text("prompt").notNull(),
+    model: text("model").notNull().default("gemini-3.5-flash"),
+    frequency: text("frequency").notNull().default("daily"), // daily | weekly | once | hourly
+    timeOfDay: text("timeOfDay").notNull().default("09:00"),
+    status: text("status").notNull().default("active"), // active | paused
+    lastRunAt: timestamp("lastRunAt"),
+    nextRunAt: timestamp("nextRunAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => [index("scheduled_task_userId_idx").on(t.userId)]
+);
+
+// ── Saved Library Items ───────────────────────────────────────────────────────
+export const libraryItem = pgTable(
+  "library_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    type: text("type").notNull(), // image | document | code | prompt | note
+    content: text("content").notNull(),
+    previewUrl: text("previewUrl"),
+    tags: jsonb("tags").$type<string[]>().default([]),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => [index("library_item_userId_idx").on(t.userId)]
+);
+

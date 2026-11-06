@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useOutletContext, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBars } from "@fortawesome/free-solid-svg-icons";
+import {
+  faBars,
+  faPenToSquare,
+  faXmark,
+  faCheck,
+} from "@fortawesome/free-solid-svg-icons";
+import SparkleIcon from "../components/SparkleIcon.js";
 import WelcomeScreen from "../components/WelcomeScreen.js";
 import MessageBubble from "../components/MessageBubble.js";
 import PromptComposer from "../components/PromptComposer.js";
@@ -46,6 +52,7 @@ export default function ChatPage() {
   const [attachment, setAttachment] = useState<{ dataUrl: string; mimeType: string } | null>(null);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [proModalOpen, setProModalOpen] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -131,8 +138,8 @@ export default function ChatPage() {
   }, []);
 
   /* ── send message ── */
-  const handleSubmit = useCallback(async () => {
-    const content = input.trim();
+  const handleSubmit = useCallback(async (overrideText?: string) => {
+    const content = (overrideText !== undefined ? overrideText : input).trim();
     if ((!content && !attachment) || generating) return;
     setError(null); setGenerating(true);
     const controller = new AbortController();
@@ -266,36 +273,60 @@ export default function ChatPage() {
 
       {/* ── top bar ── */}
       <header
-        className="flex items-center gap-3 px-4 py-2.5 flex-shrink-0"
+        className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
         style={{ borderBottom: "1px solid var(--border-light)" }}
       >
-        {/* sidebar toggle (shown when sidebar is closed) */}
-        {!sidebarOpen && (
-          <button
-            onClick={onToggleSidebar}
-            className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-            style={{ color: "var(--text-secondary)" }}
-            onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            aria-label="Open sidebar"
-          >
-            <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-3 min-w-0">
+          {/* sidebar toggle (shown when sidebar is closed) */}
+          {!sidebarOpen && (
+            <button
+              onClick={onToggleSidebar}
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              aria-label="Open sidebar"
+            >
+              <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
+            </button>
+          )}
 
-        <h2
-          className="text-sm font-medium truncate flex-1"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {chat?.title ?? (isNewChat ? "" : "…")}
-        </h2>
+          <h2
+            className="text-sm font-medium truncate"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {chat?.title ?? (isNewChat ? "OBytGemini" : "…")}
+          </h2>
+        </div>
+
+        {/* Top Right Action Area */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setProModalOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium text-white transition-all shadow-sm hover:brightness-110 active:scale-95 cursor-pointer"
+            style={{ background: "#1c3aa9" }}
+          >
+            <SparkleIcon className="w-3.5 h-3.5 text-white" />
+            <span className="hidden sm:inline">Upgrade to OBytGemini Pro</span>
+            <span className="sm:hidden">Pro</span>
+          </button>
+
+          <button
+            onClick={() => navigate("/")}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+            title="New Chat"
+            aria-label="New chat"
+          >
+            <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* ── message area ── */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
         {loadingChat ? (
           /* skeleton loader */
-          <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+          <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 w-full">
             {[...Array(3)].map((_, i) => (
               <div key={i} className={`flex gap-3 ${i % 2 === 0 ? "" : "justify-end"}`}>
                 {i % 2 === 0 && <div className="w-8 h-8 rounded-full animate-pulse flex-shrink-0" style={{ background: "var(--bg-hover)" }} />}
@@ -304,9 +335,24 @@ export default function ChatPage() {
             ))}
           </div>
         ) : isNewChat && !hasMessages ? (
-          <WelcomeScreen userName={user?.name} onPrompt={p => setInput(p)} />
+          <WelcomeScreen
+            onPrompt={p => {
+              setInput(p);
+              handleSubmit(p);
+            }}
+            input={input}
+            setInput={setInput}
+            onSubmit={() => (imageMode ? handleGenerateImage() : handleSubmit())}
+            loading={generating}
+            models={models}
+            provider={provider}
+            model={model}
+            onModelChange={handleModelChange}
+            attachment={attachment}
+            onAttachmentChange={setAttachment}
+          />
         ) : (
-          <div className="max-w-3xl mx-auto px-4 pt-6 pb-4 space-y-2">
+          <div className="max-w-3xl mx-auto px-4 pt-6 pb-4 space-y-2 w-full flex-1">
             {messages.map((msg, idx) => (
               <MessageBubble
                 key={msg.id}
@@ -360,7 +406,7 @@ export default function ChatPage() {
           {error && (
             <button
               onClick={() => setError(null)}
-              className="font-bold text-lg leading-none flex-shrink-0"
+              className="font-bold text-lg leading-none flex-shrink-0 cursor-pointer"
               style={{ color: "var(--error-text)" }}
               aria-label="Dismiss"
             >×</button>
@@ -368,27 +414,99 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* ── composer ── */}
-      <div className="flex-shrink-0 py-2">
-        <PromptComposer
-          value={input}
-          onChange={setInput}
-          onSubmit={imageMode ? handleGenerateImage : handleSubmit}
-          onCancel={handleCancel}
-          loading={generating}
-          models={models}
-          provider={provider}
-          model={model}
-          onModelChange={handleModelChange}
-          imageMode={imageMode}
-          canGenerateImages={(provider === "google" || provider === "openai") && models.some(m => m.provider === provider && m.available)}
-          onImageModeChange={setImageMode}
-          attachment={attachment}
-          onAttachmentChange={setAttachment}
-          canAttachImages={VISION_PROVIDERS.has(provider) && selectedAvailable}
-          disabled={loadingChat}  // only disable while loading an existing chat
-        />
-      </div>
+      {/* ── composer (only when in active conversation) ── */}
+      {(!isNewChat || hasMessages) && (
+        <div className="flex-shrink-0 py-2">
+          <PromptComposer
+            value={input}
+            onChange={setInput}
+            onSubmit={imageMode ? handleGenerateImage : () => handleSubmit()}
+            onCancel={handleCancel}
+            loading={generating}
+            models={models}
+            provider={provider}
+            model={model}
+            onModelChange={handleModelChange}
+            imageMode={imageMode}
+            canGenerateImages={(provider === "google" || provider === "openai") && models.some(m => m.provider === provider && m.available)}
+            onImageModeChange={setImageMode}
+            attachment={attachment}
+            onAttachmentChange={setAttachment}
+            canAttachImages={VISION_PROVIDERS.has(provider) && selectedAvailable}
+            disabled={loadingChat}
+          />
+        </div>
+      )}
+
+      {/* ── OBytGemini Pro Upgrade Modal ── */}
+      {proModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
+          onClick={() => setProModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl p-6 shadow-2xl border relative flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150"
+            style={{ background: "var(--bg-sidebar)", borderColor: "var(--border-subtle)" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setProModalOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+            >
+              <FontAwesomeIcon icon={faXmark} className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-[#1c3aa9] text-white">
+                <SparkleIcon className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-[var(--text-primary)]">OBytGemini Pro</h3>
+                <p className="text-xs text-[var(--text-secondary)]">Elevate your AI productivity</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 py-2 text-sm text-[var(--text-secondary)]">
+              <div className="flex items-start gap-2.5">
+                <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-[var(--accent-blue)] mt-1 shrink-0" />
+                <span><strong className="text-[var(--text-primary)]">Expanded Context & Limits:</strong> Up to 1M+ token context windows for deep document and codebase analysis.</span>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-[var(--accent-blue)] mt-1 shrink-0" />
+                <span><strong className="text-[var(--text-primary)]">Multi-Model Reasoning:</strong> Full access to Gemini 1.5 Pro, Claude 3.5 Sonnet, GPT-4o, and DeepSeek R1.</span>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-[var(--accent-blue)] mt-1 shrink-0" />
+                <span><strong className="text-[var(--text-primary)]">Creative Studio:</strong> Dedicated Image generator with multiple aspect ratios and style presets.</span>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-[var(--accent-blue)] mt-1 shrink-0" />
+                <span><strong className="text-[var(--text-primary)]">Study & Scheduling:</strong> AI flashcards, quizzes, automated recurring prompts, and unlimited notebooks.</span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  alert("You're using OBytGemini Pro! All features and endpoints are fully unlocked.");
+                  setProModalOpen(false);
+                }}
+                className="w-full py-2.5 rounded-full text-white text-sm font-medium transition-all shadow hover:brightness-110 active:scale-[0.98] cursor-pointer"
+                style={{ background: "#1c3aa9" }}
+              >
+                Start 14-day free trial
+              </button>
+              <button
+                onClick={() => setProModalOpen(false)}
+                className="w-full py-2 rounded-full text-xs text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors cursor-pointer"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

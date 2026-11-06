@@ -99,6 +99,19 @@ export const signInWithGoogle = () => socialSignIn("google");
 // ── Sign out ──────────────────────────────────────────────────────────────────
 
 export async function signOut(): Promise<void> {
-  await apiPost("/api/auth/sign-out");
+  try {
+    await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" });
+  } catch {
+    // Ignore network error
+  }
+  try {
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
+    });
+  } catch {
+    // Ignore
+  }
   window.location.href = "/signin";
 }
