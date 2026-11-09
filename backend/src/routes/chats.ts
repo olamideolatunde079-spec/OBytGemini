@@ -272,7 +272,7 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   const provider = parsed.data.provider ?? chatRecord.selectedProvider;
   const modelId = parsed.data.model ?? chatRecord.selectedModel;
 
-  let aiModel;
+  let aiModel: import("ai").LanguageModel | undefined;
   let providerMissingMessage: string | null = null;
   try {
     aiModel = getModel(provider, modelId);
@@ -299,7 +299,7 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
 
   // Build message history — limit to last 20 messages for performance
   const recentHistory = history.slice(-20);
-  const aiMessages: ModelMessage[] = recentHistory.map((m) => {
+  const aiMessages: ModelMessage[] = recentHistory.map((m: { role: string; content: string }) => {
     if (m.role === "assistant") {
       return { role: "assistant" as const, content: m.content };
     }
@@ -409,7 +409,7 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
   let streamError: unknown;
   try {
     const { textStream } = streamText({
-      model: aiModel,
+      model: aiModel!,
       system: systemPrompt,
       messages: aiMessages,
       abortSignal: AbortSignal.any([
@@ -419,6 +419,15 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
       maxRetries: 0,
       onError: ({ error }) => {
         streamError = error;
+        console.error("AI stream error:", {
+          provider,
+          model: modelId,
+          errorName: error instanceof Error ? error.name : "Unknown",
+          errorMessage: error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200),
+          cause: (error as Record<string, unknown>)?.cause instanceof Error
+            ? ((error as Record<string, unknown>).cause as Error).message.slice(0, 150)
+            : undefined,
+        });
       },
     });
 

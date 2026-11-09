@@ -121,11 +121,11 @@ setInterval(() => {
 
 // ── Install the patched fetch ──────────────────────────────────────────────
 export function installCurlFetchForNeon(): void {
-  // On Vercel (and most cloud environments), Node.js fetch works fine to Neon.
-  // Only patch fetch on local machines where Node's undici is blocked from AWS.
+  // On Vercel (and most cloud environments), Node.js fetch works fine.
+  // Only patch fetch on local machines where Node's undici is blocked.
   const isVercel = Boolean(process.env.VERCEL);
   if (isVercel) {
-    console.log("✅ Vercel environment — using native fetch for Neon DB");
+    console.log("✅ Vercel environment — using native fetch for all connections");
     return;
   }
 
@@ -142,29 +142,44 @@ export function installCurlFetchForNeon(): void {
           ? input.href
           : (input as Request).url;
 
-    if (url.includes(".neon.tech")) {
-      const result = await curlFetch(url, init ?? {});
-      return {
-        ok: result.ok,
-        status: result.status,
-        statusText: result.ok ? "OK" : "Error",
-        json: result.json,
-        text: result.text,
-        headers: result.headers as unknown as Headers,
-        body: null,
-        bodyUsed: false,
-        redirected: false,
-        type: "basic" as Response["type"],
-        url,
-        arrayBuffer: async () => new ArrayBuffer(0),
-        blob: async () => new Blob([]),
-        formData: async () => new FormData(),
-        clone: function (this: Response) { return this; },
-      } as unknown as Response;
+    // Local requests: always use native fetch
+    const isLocal = url.includes("localhost") || url.includes("127.0.0.1") || url.includes("0.0.0.0");
+    if (isLocal) {
+      return originalFetch(input, init);
     }
 
-    return originalFetch.call(this, input, init);
+    // External requests: try native fetch first (returns proper ReadableStream),
+    // fall back to curl only if native fetch fails (intermittent network issue).
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      const response = await originalFetch(input, { ...init, signal: init?.signal ?? controller.signal });
+      clearTimeout(timeout);
+      return response;
+    } catch {
+      // Native fetch failed — retry through curl
+      try {
+        const result = await curlFetch(url, init ?? {});
+        // Create a proper ReadableStream from the response body
+        const bodyText = await result.text();
+        const stream = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(encoder.encode(bodyText));
+            controller.close();
+          }
+        });
+        return new Response(stream, {
+          status: result.status,
+          statusText: result.ok ? "OK" : "Error",
+          headers: new Headers(),
+        });
+      } catch {
+        // Both failed — rethrow a clean error
+        throw new Error(`Both native fetch and curl failed for ${url.slice(0, 60)}`);
+      }
+    }
   };
 
-  console.log("✅ Async curl-fetch installed for Neon DB (non-blocking)");
+  console.log("✅ Async curl-fetch installed for ALL external HTTPS (non-blocking)");
 }
