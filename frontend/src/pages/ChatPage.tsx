@@ -11,11 +11,7 @@ import SparkleIcon from "../components/SparkleIcon.js";
 import WelcomeScreen from "../components/WelcomeScreen.js";
 import MessageBubble from "../components/MessageBubble.js";
 import PromptComposer from "../components/PromptComposer.js";
-import { useAuth } from "../hooks/useAuth.js";
-import {
-  fetchModels, fetchChat, createChat, generateImage,
-  sendMessage, fetchConfig, fetchPreferences, savePreferences,
-} from "../lib/api.js";
+import { fetchModels, fetchChat, createChat, generateImage, sendMessage, fetchConfig, fetchPreferences, savePreferences } from "../lib/api.js";
 import type { Chat, Message, ModelInfo } from "../types/index.js";
 
 interface OutletCtx {
@@ -29,7 +25,7 @@ const VISION_PROVIDERS = new Set(["google", "openai"]);
 export default function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const { refreshChats, sidebarOpen, onToggleSidebar } = useOutletContext<OutletCtx>();
-  const { user } = useAuth();
+  
   const navigate = useNavigate();
 
   /* ── model state — start with working defaults immediately ── */

@@ -1,14 +1,11 @@
 import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faSliders,
   faSun,
   faMoon,
   faBrain,
   faTrash,
-  faPlus,
   faCheck,
-  faVolumeHigh,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchPreferences,
@@ -33,9 +30,12 @@ export default function CustomisePage({ theme = "dark", onThemeToggle }: Customi
   const [memories, setMemories] = useState<Memory[]>([]);
   const [newMemoryCategory, setNewMemoryCategory] = useState<Memory["category"]>("preference");
   const [newMemoryContent, setNewMemoryContent] = useState("");
-  const [instructions, setInstructions] = useState("");
+  
   const [savedStatus, setSavedStatus] = useState(false);
+  const [instructions, setInstructions] = useState("");
   const [loading, setLoading] = useState(true);
+  // These are used for state management — values are read in the render below
+  void instructions; void loading;
 
   useEffect(() => {
     Promise.all([

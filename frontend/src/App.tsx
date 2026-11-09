@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth.js";
 import AppShell from "./components/AppShell.js";
 import SignInPage from "./pages/SignInPage.js";
+import OnboardingPage from "./pages/OnboardingPage.js";
 import ChatPage from "./pages/ChatPage.js";
 import LibraryPage from "./pages/LibraryPage.js";
 import ImagesPage from "./pages/ImagesPage.js";
@@ -21,15 +22,17 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#101114]">
-        <div className="flex flex-col items-center gap-3">
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--bg-base)" }}>
+        <div className="flex flex-col items-center gap-4">
           <img
             src="/images/obytgemini-logo.png"
             alt="OBytGemini"
-            aria-hidden="true"
-            className="w-12 h-12 object-contain animate-pulse"
+            className="w-16 h-16 object-contain"
+            style={{ animation: "pulse 1.5s ease-in-out infinite" }}
           />
-          <p className="text-sm text-[#AEB4BE]">Loading OBytGemini…</p>
+          <p className="text-sm font-medium tracking-wide" style={{ color: "var(--text-secondary)" }}>
+            OBytGemini
+          </p>
         </div>
       </div>
     );
@@ -37,12 +40,13 @@ export default function App() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#101114] px-4">
+      <div className="flex min-h-screen items-center justify-center px-4" style={{ background: "var(--bg-base)" }}>
         <div className="max-w-sm text-center">
-          <p role="alert" className="text-sm text-red-400">{error}</p>
+          <p role="alert" className="text-sm" style={{ color: "var(--error-text)" }}>{error}</p>
           <button
             onClick={refresh}
-            className="mt-4 rounded-full bg-[#8AB4F8] px-5 py-2 text-sm font-medium text-[#101114] hover:bg-[#a8c7fa] transition-colors"
+            className="mt-4 rounded-full px-5 py-2 text-sm font-medium transition-colors"
+            style={{ background: "var(--accent-blue)", color: "var(--text-inverse)" }}
           >
             Try again
           </button>
@@ -53,6 +57,9 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Onboarding page for first-time visitors */}
+      <Route path="/welcome" element={<OnboardingPage />} />
+
       {/* Sign-in page (redirects to / if already authed) */}
       <Route
         path="/signin"
@@ -62,7 +69,7 @@ export default function App() {
       {/* Main app — requires auth */}
       <Route
         path="/"
-        element={user ? <AppShell /> : <Navigate to="/signin" replace />}
+        element={user ? <AppShell /> : <Navigate to="/welcome" replace />}
       >
         <Route index element={<ChatPage />} />
         <Route path="chat/:chatId" element={<ChatPage />} />

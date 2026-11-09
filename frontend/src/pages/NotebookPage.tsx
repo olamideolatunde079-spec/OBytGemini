@@ -9,7 +9,6 @@ import {
   faCheck,
   faArrowLeft,
   faPen,
-  faPalette,
 } from "@fortawesome/free-solid-svg-icons";
 import SparkleIcon from "../components/SparkleIcon.js";
 import { fetchNotebook, updateNotebook, deleteNotebook } from "../lib/api.js";

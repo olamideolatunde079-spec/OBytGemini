@@ -508,7 +508,16 @@ export default function Sidebar({
                 e.stopPropagation();
                 await signOut();
               }}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs transition-colors cursor-pointer"
+              style={{ color: "var(--text-muted)" }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
+                (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.background = "transparent";
+                (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
+              }}
               title="Sign out of account"
             >
               <FontAwesomeIcon icon={faRightFromBracket} className="w-3.5 h-3.5 shrink-0" />

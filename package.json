@@ -5,11 +5,12 @@
   "description": "OBytGemini — multi-provider AI chat application",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build frontend --outDir ../dist/frontend",
-    "start": "NODE_ENV=production tsx server.ts",
+    "dev": "tsx --env-file=backend/.env server.ts",
+    "build": "cd frontend && npm run build",
+    "start": "NODE_ENV=production tsx --env-file=backend/.env server.ts",
     "type-check": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:push": "cd backend && npm run db:push"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.89",

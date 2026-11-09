@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, type KeyboardEvent } from "react";
+import { useRef, useEffect, useState, type KeyboardEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -64,6 +64,13 @@ export default function PromptComposer({
   const [speechSupported, setSpeechSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
 
+  // Refs to access latest value/onChange inside the recognition callback
+  // without re-creating the SpeechRecognition instance on every keystroke
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { valueRef.current = value; }, [value]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+
   /* Auto-resize textarea */
   useEffect(() => {
     const ta = textareaRef.current;
@@ -72,7 +79,7 @@ export default function PromptComposer({
     ta.style.height = `${Math.min(ta.scrollHeight, 180)}px`;
   }, [value]);
 
-  /* Speech recognition setup */
+  /* Speech recognition setup — only run ONCE on mount, not on every keystroke */
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -92,7 +99,8 @@ export default function PromptComposer({
         for (let i = event.resultIndex; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        onChange(value ? `${value} ${transcript}` : transcript);
+        // Use a callback ref to get the latest value without re-creating recognition
+        onChangeRef.current(valueRef.current ? `${valueRef.current} ${transcript}` : transcript);
       };
 
       recognition.onerror = () => {
@@ -111,7 +119,7 @@ export default function PromptComposer({
     return () => {
       recognitionRef.current?.stop();
     };
-  }, [onChange, value]);
+  }, []); // ← empty deps: run once only
 
   const toggleRecording = () => {
     if (!recognitionRef.current) return;
