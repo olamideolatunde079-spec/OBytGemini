@@ -183,7 +183,7 @@ export default function PromptComposer({
   const displayModelName = currentModel?.displayName || "Gemini Auto";
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 relative">
+    <div className="w-full max-w-2xl mx-auto px-2 sm:px-4 relative min-w-0">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -223,6 +223,7 @@ export default function PromptComposer({
       <div
         className={`
           flex items-center gap-2 px-3 py-2 rounded-full border transition-all duration-150 shadow-md
+          min-w-0 w-full
           ${
             isRecording
               ? "ring-2 ring-red-500/50 border-red-500"
@@ -305,8 +306,19 @@ export default function PromptComposer({
           placeholder={isRecording ? "Listening to your voice..." : placeholder}
           rows={1}
           disabled={disabled}
-          className="flex-1 bg-transparent outline-none resize-none text-sm text-[var(--text-primary)] placeholder-gray-500 py-1.5 px-1 leading-normal max-h-40 min-h-[24px]"
+          className="composer-textarea flex-1 bg-transparent outline-none text-[var(--text-primary)] placeholder-gray-500 py-1.5 px-1 leading-normal"
           aria-label="Message input"
+          style={{
+            /* Belt-and-suspenders: also set via inline style so no CSS specificity war */
+            writingMode: "horizontal-tb",
+            direction: "ltr",
+            whiteSpace: "pre-wrap",
+            overflowWrap: "break-word",
+            wordBreak: "normal",
+            minWidth: 0,
+            width: "100%",
+            boxSizing: "border-box",
+          }}
         />
 
         {/* Right Section: Model Selector & Actions */}
@@ -320,7 +332,7 @@ export default function PromptComposer({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
               title="Select Model"
             >
-              <span className="truncate max-w-[120px]">{displayModelName}</span>
+              <span className="truncate max-w-[80px] sm:max-w-[120px]">{displayModelName}</span>
               <FontAwesomeIcon
                 icon={faChevronDown}
                 className={`w-2.5 h-2.5 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`}
@@ -330,8 +342,12 @@ export default function PromptComposer({
             {/* Model Dropdown */}
             {modelDropdownOpen && (
               <div
-                className="absolute right-0 bottom-12 z-50 w-72 rounded-2xl py-2 shadow-2xl border border-white/10 max-h-80 overflow-y-auto"
-                style={{ background: "var(--bg-surface-secondary)" }}
+                className="absolute right-0 bottom-12 z-50 rounded-2xl py-2 shadow-2xl border border-white/10 overflow-y-auto"
+                style={{
+                  width: "min(288px, calc(100vw - 2rem))",
+                  maxHeight: "60vh",
+                  background: "var(--bg-surface-secondary)",
+                }}
               >
                 <div className="px-3 py-1 text-xs font-semibold text-[var(--text-muted)] border-b border-white/5 pb-1 mb-1">
                   Model Selector

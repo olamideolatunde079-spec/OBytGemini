@@ -91,7 +91,7 @@ export default function ModelSelector({ models, provider, model, onChange, disab
           className="w-2.5 h-2.5 rounded-full flex-shrink-0"
           style={{ background: providerColor }}
         />
-        <span className="max-w-[160px] truncate">
+        <span className="max-w-[100px] sm:max-w-[160px] truncate">
           {current?.displayName ?? `${provider}/${model}`}
         </span>
         <FontAwesomeIcon
@@ -106,10 +106,10 @@ export default function ModelSelector({ models, provider, model, onChange, disab
         <div
           className="absolute bottom-full mb-3 left-0 z-50 rounded-2xl overflow-hidden shadow-2xl"
           style={{
-            width: 340,
+            width: "min(340px, calc(100vw - 2rem))",
             background: "var(--bg-surface)",
             border: "1px solid var(--border)",
-            maxHeight: "70vh",
+            maxHeight: "60vh",
             overflowY: "auto",
           }}
           role="listbox"

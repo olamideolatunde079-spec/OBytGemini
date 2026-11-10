@@ -14,6 +14,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { generateStudyContent } from "../lib/api.js";
 import type { StudyFlashcard, StudyQuizQuestion } from "../types/index.js";
+import BackButton from "../components/BackButton.js";
 
 type StudyTab = "explain" | "flashcards" | "quiz" | "summary";
 
@@ -78,10 +79,13 @@ export default function StudyPage() {
     <div className="flex-1 overflow-y-auto p-6 max-w-5xl w-full mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-          Students & Study Workspace
-        </h1>
-        <p className="text-xs text-[var(--text-muted)] mt-1">
+        <div className="flex items-center gap-3 mb-1">
+          <BackButton fallback="/" label="Back" />
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+            Students &amp; Study Workspace
+          </h1>
+        </div>
+        <p className="text-xs text-[var(--text-muted)] mt-1 pl-12">
           Master any subject with AI-powered tutoring, interactive flashcards, quizzes, and revision guides.
         </p>
       </div>

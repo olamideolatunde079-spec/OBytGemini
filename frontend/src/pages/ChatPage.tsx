@@ -3,7 +3,6 @@ import { useParams, useOutletContext, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBars,
-  faArrowLeft,
   faPenToSquare,
   faXmark,
   faCheck,
@@ -12,6 +11,7 @@ import SparkleIcon from "../components/SparkleIcon.js";
 import WelcomeScreen from "../components/WelcomeScreen.js";
 import MessageBubble from "../components/MessageBubble.js";
 import PromptComposer from "../components/PromptComposer.js";
+import BackButton from "../components/BackButton.js";
 import { fetchModels, fetchChat, createChat, generateImage, sendMessage, fetchConfig, fetchPreferences, savePreferences } from "../lib/api.js";
 import type { Chat, Message, ModelInfo } from "../types/index.js";
 
@@ -273,7 +273,7 @@ export default function ChatPage() {
         style={{ borderBottom: "1px solid var(--border-light)" }}
       >
         <div className="flex items-center gap-3 min-w-0">
-          {/* sidebar toggle (shown when sidebar is closed) — hidden on mobile when in a chat */}
+          {/* sidebar toggle (shown when sidebar is closed on a new chat) */}
           {!sidebarOpen && !chatId && (
             <button
               onClick={onToggleSidebar}
@@ -287,19 +287,9 @@ export default function ChatPage() {
             </button>
           )}
 
-          {/* Back button — visible on mobile (when sidebar is closed and we're in a chat) */}
+          {/* Back button — always visible when inside a specific chat */}
           {chatId && (
-            <button
-              onClick={() => navigate("/")}
-              className="md:hidden w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0"
-              style={{ color: "var(--text-secondary)" }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-              aria-label="Back to home"
-              title="Back"
-            >
-              <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
-            </button>
+            <BackButton fallback="/" label="Back to chats" />
           )}
 
           <h2

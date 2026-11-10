@@ -12,6 +12,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchLibraryItems, deleteLibraryItem, createLibraryItem } from "../lib/api.js";
 import type { LibraryItem } from "../types/index.js";
+import BackButton from "../components/BackButton.js";
 
 export default function LibraryPage() {
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -90,13 +91,16 @@ export default function LibraryPage() {
     <div className="flex-1 overflow-y-auto p-6 max-w-6xl w-full mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
+        <div className="flex items-center gap-3">
+          <BackButton fallback="/" label="Back" />
+          <div>
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
             Library
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             Access, organize, and download your saved AI content, generated images, and documents.
           </p>
+          </div>
         </div>
         <button
           onClick={() => setNewNoteOpen(true)}

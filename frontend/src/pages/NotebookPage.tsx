@@ -7,12 +7,12 @@ import {
   faDownload,
   faGraduationCap,
   faCheck,
-  faArrowLeft,
   faPen,
 } from "@fortawesome/free-solid-svg-icons";
 import SparkleIcon from "../components/SparkleIcon.js";
 import { fetchNotebook, updateNotebook, deleteNotebook } from "../lib/api.js";
 import type { Notebook } from "../types/index.js";
+import BackButton from "../components/BackButton.js";
 
 const NOTEBOOK_COLORS = [
   "#8AB4F8", // Gemini Blue
@@ -150,10 +150,10 @@ export default function NotebookPage() {
         <h2 className="text-lg font-medium text-[var(--text-primary)] mb-2">Notebook not found</h2>
         <p className="text-sm text-[var(--text-secondary)] mb-4">{error || "This notebook might have been removed."}</p>
         <button
-          onClick={() => navigate("/")}
-          className="px-4 py-2 rounded-full bg-[var(--bg-hover)] text-sm text-[var(--text-primary)] hover:bg-[var(--border-subtle)] transition-colors"
+          onClick={() => navigate(-1 as any)}
+          className="px-4 py-2 rounded-full bg-[var(--bg-hover)] text-sm text-[var(--text-primary)] hover:bg-[var(--bg-active)] transition-colors"
         >
-          Return to chat
+          Go back
         </button>
       </div>
     );
@@ -167,13 +167,7 @@ export default function NotebookPage() {
         style={{ borderColor: "var(--border-subtle)", background: "var(--bg-sidebar)" }}
       >
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <button
-            onClick={() => navigate("/")}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
-            title="Back to home"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
-          </button>
+          <BackButton fallback="/" label="Back to notebooks" />
 
           {/* Color Tag / Picker */}
           <div className="relative">

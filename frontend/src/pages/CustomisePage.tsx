@@ -17,6 +17,7 @@ import {
   fetchModels,
 } from "../lib/api.js";
 import type { Memory, ModelInfo } from "../types/index.js";
+import BackButton from "../components/BackButton.js";
 
 interface CustomisePageProps {
   theme?: "light" | "dark";
@@ -107,10 +108,13 @@ export default function CustomisePage({ theme = "dark", onThemeToggle }: Customi
     <div className="flex-1 overflow-y-auto p-6 max-w-4xl w-full mx-auto space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-          Customise & Settings
-        </h1>
-        <p className="text-xs text-[var(--text-muted)] mt-1">
+        <div className="flex items-center gap-3 mb-1">
+          <BackButton fallback="/" label="Back" />
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+            Customise &amp; Settings
+          </h1>
+        </div>
+        <p className="text-xs text-[var(--text-muted)] mt-1 pl-12">
           Personalize your appearance, default AI model, instructions, and assistant memories.
         </p>
       </div>
