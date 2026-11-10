@@ -3,6 +3,7 @@ import { useParams, useOutletContext, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBars,
+  faArrowLeft,
   faPenToSquare,
   faXmark,
   faCheck,
@@ -25,7 +26,6 @@ const VISION_PROVIDERS = new Set(["google", "openai"]);
 export default function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const { refreshChats, sidebarOpen, onToggleSidebar } = useOutletContext<OutletCtx>();
-  
   const navigate = useNavigate();
 
   /* ── model state — start with working defaults immediately ── */
@@ -273,8 +273,8 @@ export default function ChatPage() {
         style={{ borderBottom: "1px solid var(--border-light)" }}
       >
         <div className="flex items-center gap-3 min-w-0">
-          {/* sidebar toggle (shown when sidebar is closed) */}
-          {!sidebarOpen && (
+          {/* sidebar toggle (shown when sidebar is closed) — hidden on mobile when in a chat */}
+          {!sidebarOpen && !chatId && (
             <button
               onClick={onToggleSidebar}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
@@ -284,6 +284,21 @@ export default function ChatPage() {
               aria-label="Open sidebar"
             >
               <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Back button — visible on mobile (when sidebar is closed and we're in a chat) */}
+          {chatId && (
+            <button
+              onClick={() => navigate("/")}
+              className="md:hidden w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0"
+              style={{ color: "var(--text-secondary)" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              aria-label="Back to home"
+              title="Back"
+            >
+              <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4" />
             </button>
           )}
 
@@ -429,7 +444,7 @@ export default function ChatPage() {
             attachment={attachment}
             onAttachmentChange={setAttachment}
             canAttachImages={VISION_PROVIDERS.has(provider) && selectedAvailable}
-            disabled={loadingChat}
+            
           />
         </div>
       )}

@@ -99,27 +99,18 @@ export default function PromptComposer({
         for (let i = event.resultIndex; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        // Use a callback ref to get the latest value without re-creating recognition
         onChangeRef.current(valueRef.current ? `${valueRef.current} ${transcript}` : transcript);
       };
 
-      recognition.onerror = () => {
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
+      recognition.onerror = () => { setIsRecording(false); };
+      recognition.onend = () => { setIsRecording(false); };
       recognitionRef.current = recognition;
     } catch {
       setSpeechSupported(false);
     }
 
-    return () => {
-      recognitionRef.current?.stop();
-    };
-  }, []); // ← empty deps: run once only
+    return () => { recognitionRef.current?.stop(); };
+  }, []);
 
   const toggleRecording = () => {
     if (!recognitionRef.current) return;
@@ -154,7 +145,8 @@ export default function PromptComposer({
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!loading && (value.trim() || attachment)) {
+      // Allow sending even while AI is generating — concurrent messages
+      if ((value.trim() || attachment) && !disabled) {
         onSubmit();
       }
     }
@@ -189,7 +181,6 @@ export default function PromptComposer({
 
   const currentModel = models.find((m) => m.provider === provider && m.model === model);
   const displayModelName = currentModel?.displayName || "Gemini Auto";
-  const canSend = (value.trim().length > 0 || attachment !== null) && !disabled && !loading;
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 relative">
@@ -245,10 +236,9 @@ export default function PromptComposer({
         {/* Left Attachment Button (+) */}
         <div className="relative">
           <button
-            id="attachment-menu-trigger"
             type="button"
             onClick={() => setAttachMenuOpen((v) => !v)}
-            disabled={loading || disabled}
+            disabled={disabled}
             className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors shrink-0"
             title="Attach file or image"
             aria-label="Add attachment"
@@ -314,7 +304,7 @@ export default function PromptComposer({
           onKeyDown={handleKeyDown}
           placeholder={isRecording ? "Listening to your voice..." : placeholder}
           rows={1}
-          disabled={disabled || loading}
+          disabled={disabled}
           className="flex-1 bg-transparent outline-none resize-none text-sm text-[var(--text-primary)] placeholder-gray-500 py-1.5 px-1 leading-normal max-h-40 min-h-[24px]"
           aria-label="Message input"
         />
@@ -326,7 +316,7 @@ export default function PromptComposer({
             <button
               type="button"
               onClick={() => setModelDropdownOpen((v) => !v)}
-              disabled={loading || disabled}
+              disabled={disabled}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
               title="Select Model"
             >
@@ -382,7 +372,7 @@ export default function PromptComposer({
             <button
               type="button"
               onClick={toggleRecording}
-              disabled={loading || disabled}
+              disabled={disabled}
               className={`
                 w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0
                 ${
@@ -410,7 +400,7 @@ export default function PromptComposer({
               <FontAwesomeIcon icon={faStop} className="w-3.5 h-3.5" />
             </button>
           ) : (
-            canSend && (
+            (value.trim().length > 0 || attachment !== null) && !disabled && (
               <button
                 type="button"
                 onClick={onSubmit}

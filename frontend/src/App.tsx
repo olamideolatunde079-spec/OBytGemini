@@ -1,20 +1,35 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth.js";
 import AppShell from "./components/AppShell.js";
 import SignInPage from "./pages/SignInPage.js";
 import OnboardingPage from "./pages/OnboardingPage.js";
 import ChatPage from "./pages/ChatPage.js";
-import LibraryPage from "./pages/LibraryPage.js";
-import ImagesPage from "./pages/ImagesPage.js";
-import ScheduledPage from "./pages/ScheduledPage.js";
-import StudyPage from "./pages/StudyPage.js";
-import CustomisePage from "./pages/CustomisePage.js";
-import NotebookPage from "./pages/NotebookPage.js";
 import { useOutletContext } from "react-router-dom";
+
+// Lazy-load non-essential pages — reduces initial bundle and speeds up startup
+const LibraryPage = lazy(() => import("./pages/LibraryPage.js"));
+const ImagesPage = lazy(() => import("./pages/ImagesPage.js"));
+const ScheduledPage = lazy(() => import("./pages/ScheduledPage.js"));
+const StudyPage = lazy(() => import("./pages/StudyPage.js"));
+const CustomisePage = lazy(() => import("./pages/CustomisePage.js"));
+const NotebookPage = lazy(() => import("./pages/NotebookPage.js"));
 
 function CustomisePageWrapper() {
   const { theme, onThemeToggle } = useOutletContext<{ theme: "light" | "dark"; onThemeToggle: () => void }>();
   return <CustomisePage theme={theme} onThemeToggle={onThemeToggle} />;
+}
+
+// Lightweight loading fallback for lazy pages
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div
+        className="w-6 h-6 rounded-full animate-spin"
+        style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent-blue)" }}
+      />
+    </div>
+  );
 }
 
 export default function App() {
@@ -73,12 +88,12 @@ export default function App() {
       >
         <Route index element={<ChatPage />} />
         <Route path="chat/:chatId" element={<ChatPage />} />
-        <Route path="library" element={<LibraryPage />} />
-        <Route path="images" element={<ImagesPage />} />
-        <Route path="scheduled" element={<ScheduledPage />} />
-        <Route path="study" element={<StudyPage />} />
-        <Route path="customise" element={<CustomisePageWrapper />} />
-        <Route path="notebook/:notebookId" element={<NotebookPage />} />
+        <Route path="library" element={<Suspense fallback={<PageLoader />}><LibraryPage /></Suspense>} />
+        <Route path="images" element={<Suspense fallback={<PageLoader />}><ImagesPage /></Suspense>} />
+        <Route path="scheduled" element={<Suspense fallback={<PageLoader />}><ScheduledPage /></Suspense>} />
+        <Route path="study" element={<Suspense fallback={<PageLoader />}><StudyPage /></Suspense>} />
+        <Route path="customise" element={<Suspense fallback={<PageLoader />}><CustomisePageWrapper /></Suspense>} />
+        <Route path="notebook/:notebookId" element={<Suspense fallback={<PageLoader />}><NotebookPage /></Suspense>} />
       </Route>
 
       {/* Fallback */}
