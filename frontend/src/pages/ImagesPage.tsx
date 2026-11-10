@@ -10,7 +10,6 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import SparkleIcon from "../components/SparkleIcon.js";
 import { generateImage, createLibraryItem } from "../lib/api.js";
-import BackButton from "../components/BackButton.js";
 
 interface GeneratedImageItem {
   id: string;
@@ -110,16 +109,13 @@ export default function ImagesPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 max-w-6xl w-full mx-auto">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 max-w-6xl w-full mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-1">
-          <BackButton fallback="/" label="Back" />
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Images
-          </h1>
-        </div>
-        <p className="text-xs text-[var(--text-muted)] mt-1 pl-12">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+          Images
+        </h1>
+        <p className="text-xs text-[var(--text-muted)] mt-1">
           Generate, edit, and explore high-fidelity visuals using Google Gemini and OpenAI image models.
         </p>
       </div>

@@ -222,17 +222,15 @@ export default function PromptComposer({
       {/* Main Pill-Shaped Composer */}
       <div
         className={`
-          flex items-center gap-2 px-3 py-2 rounded-full border transition-all duration-150 shadow-md
-          min-w-0 w-full
+          composer-pill
+          gap-2 px-3 py-2 rounded-full border transition-all duration-150 shadow-md
           ${
             isRecording
               ? "ring-2 ring-red-500/50 border-red-500"
               : "border-white/10 hover:border-white/20 focus-within:border-white/25"
           }
         `}
-        style={{
-          background: "var(--bg-surface)",
-        }}
+        style={{ background: "var(--bg-surface)" }}
       >
         {/* Left Attachment Button (+) */}
         <div className="relative">
@@ -297,7 +295,7 @@ export default function PromptComposer({
           )}
         </div>
 
-        {/* Text Input */}
+        {/* Text Input — composer-textarea class applies all mobile-safe rules */}
         <textarea
           ref={textareaRef}
           value={value}
@@ -306,19 +304,8 @@ export default function PromptComposer({
           placeholder={isRecording ? "Listening to your voice..." : placeholder}
           rows={1}
           disabled={disabled}
-          className="composer-textarea flex-1 bg-transparent outline-none text-[var(--text-primary)] placeholder-gray-500 py-1.5 px-1 leading-normal"
+          className="composer-textarea text-[var(--text-primary)] placeholder-gray-500 py-1.5 px-1"
           aria-label="Message input"
-          style={{
-            /* Belt-and-suspenders: also set via inline style so no CSS specificity war */
-            writingMode: "horizontal-tb",
-            direction: "ltr",
-            whiteSpace: "pre-wrap",
-            overflowWrap: "break-word",
-            wordBreak: "normal",
-            minWidth: 0,
-            width: "100%",
-            boxSizing: "border-box",
-          }}
         />
 
         {/* Right Section: Model Selector & Actions */}

@@ -17,7 +17,6 @@ import {
   runScheduledTask,
 } from "../lib/api.js";
 import type { ScheduledTask } from "../types/index.js";
-import BackButton from "../components/BackButton.js";
 
 export default function ScheduledPage() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
@@ -96,19 +95,16 @@ export default function ScheduledPage() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 max-w-5xl w-full mx-auto">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 max-w-5xl w-full mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-3">
-          <BackButton fallback="/" label="Back" />
-          <div>
+        <div>
           <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
             Scheduled Tasks
           </h1>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             Automate routine AI prompts, briefings, and research summaries on your schedule.
           </p>
-          </div>
         </div>
         <button
           onClick={() => setCreateModalOpen(true)}

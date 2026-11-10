@@ -221,36 +221,64 @@ html:not(.dark) .prose code:not(pre code) {
    Prevents the "vertical text" bug on mobile browsers (especially Android)
    where flexbox squeezes the textarea into a single-character column.
 ───────────────────────────────────────────────────────────────────────────── */
+
+/*
+ * The .composer-pill is the flex container that holds + button, textarea,
+ * and right-side buttons. The key rule is overflow:hidden so the pill
+ * never widens the viewport, and the textarea is the ONLY flex-grow item.
+ */
+.composer-pill {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/*
+ * .composer-textarea — the actual <textarea> inside the pill.
+ * Uses max specificity rules to defeat any Tailwind class that might
+ * apply conflicting writing-mode, width, or flex values.
+ */
 .composer-textarea {
-  /* Force horizontal writing direction — counteracts any browser quirk */
+  /* ① Writing direction — absolute override */
   writing-mode: horizontal-tb !important;
   direction: ltr !important;
 
-  /* Natural word wrapping */
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-break: normal;
-  word-wrap: break-word;
+  /* ② Text flow — natural wrap, never character-per-line */
+  white-space: pre-wrap !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
+  word-wrap: break-word !important;
 
-  /* Fill available space without overflowing */
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
+  /* ③ Flex sizing — take all available space, never collapse */
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 
-  /* Vertical auto-resize handled by JS; cap at 180px */
-  min-height: 24px;
-  max-height: 180px;
-  resize: none;
-  overflow-y: auto;
+  /* ④ Height — auto-resize via JS, capped at 180px */
+  min-height: 1.5rem !important;
+  max-height: 11.25rem !important;  /* 180px */
+  resize: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 
-  /* Prevent iOS from zooming in on focus */
-  font-size: 16px;
-  line-height: 1.5;
+  /* ⑤ Typography — 16px prevents iOS auto-zoom on focus */
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+
+  /* ⑥ Appearance */
+  background: transparent !important;
+  outline: none !important;
+  border: none !important;
 }
 
 @media (min-width: 640px) {
   .composer-textarea {
-    font-size: 14px;
+    font-size: 14px !important;
   }
 }
 

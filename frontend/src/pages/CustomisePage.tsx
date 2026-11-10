@@ -6,6 +6,7 @@ import {
   faBrain,
   faTrash,
   faCheck,
+  faRightFromBracket,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchPreferences,
@@ -17,7 +18,7 @@ import {
   fetchModels,
 } from "../lib/api.js";
 import type { Memory, ModelInfo } from "../types/index.js";
-import BackButton from "../components/BackButton.js";
+import { useAuth } from "../hooks/useAuth.js";
 
 interface CustomisePageProps {
   theme?: "light" | "dark";
@@ -25,6 +26,8 @@ interface CustomisePageProps {
 }
 
 export default function CustomisePage({ theme = "dark", onThemeToggle }: CustomisePageProps) {
+  const { signOut } = useAuth();
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [preferredProvider, setPreferredProvider] = useState("google");
   const [preferredModel, setPreferredModel] = useState("gemini-3.5-flash");
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -37,7 +40,6 @@ export default function CustomisePage({ theme = "dark", onThemeToggle }: Customi
   const [loading, setLoading] = useState(true);
   // These are used for state management — values are read in the render below
   void instructions; void loading;
-
   useEffect(() => {
     Promise.all([
       fetchPreferences().catch(() => null),
@@ -105,16 +107,13 @@ export default function CustomisePage({ theme = "dark", onThemeToggle }: Customi
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 max-w-4xl w-full mx-auto space-y-8">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 max-w-4xl w-full mx-auto space-y-8">
       {/* Header */}
       <div>
-        <div className="flex items-center gap-3 mb-1">
-          <BackButton fallback="/" label="Back" />
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
-            Customise &amp; Settings
-          </h1>
-        </div>
-        <p className="text-xs text-[var(--text-muted)] mt-1 pl-12">
+        <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+          Customise &amp; Settings
+        </h1>
+        <p className="text-xs text-[var(--text-muted)] mt-1">
           Personalize your appearance, default AI model, instructions, and assistant memories.
         </p>
       </div>
@@ -298,6 +297,57 @@ export default function CustomisePage({ theme = "dark", onThemeToggle }: Customi
             Add Memory
           </button>
         </form>
+      </div>
+
+      {/* 4. Account — Logout */}
+      <div className="rounded-3xl p-6 border border-white/10 bg-[var(--bg-surface)] shadow-sm space-y-4">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <FontAwesomeIcon icon={faRightFromBracket} className="w-4 h-4 text-[var(--text-muted)]" />
+          <span>Account</span>
+        </h3>
+        <p className="text-xs text-[var(--text-secondary)]">
+          Sign out of OBytGemini. Your chat history, notebooks, and settings are saved and will be here when you return.
+        </p>
+
+        {!confirmLogout ? (
+          <button
+            onClick={() => setConfirmLogout(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-medium transition-all"
+            style={{
+              borderColor: "var(--border)",
+              color: "var(--text-primary)",
+              background: "transparent",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <FontAwesomeIcon icon={faRightFromBracket} className="w-3.5 h-3.5" />
+            <span>Sign out</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-[var(--bg-surface-secondary)] border border-white/10">
+            <p className="text-xs text-[var(--text-secondary)] flex-1">
+              Are you sure you want to sign out?
+            </p>
+            <button
+              onClick={() => setConfirmLogout(false)}
+              className="px-3 py-1.5 rounded-full text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={async () => { await signOut(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                background: "var(--bg-active)",
+                color: "var(--text-primary)",
+              }}
+            >
+              <FontAwesomeIcon icon={faRightFromBracket} className="w-3 h-3" />
+              <span>Sign out</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -11,7 +11,6 @@ import SparkleIcon from "../components/SparkleIcon.js";
 import WelcomeScreen from "../components/WelcomeScreen.js";
 import MessageBubble from "../components/MessageBubble.js";
 import PromptComposer from "../components/PromptComposer.js";
-import BackButton from "../components/BackButton.js";
 import { fetchModels, fetchChat, createChat, generateImage, sendMessage, fetchConfig, fetchPreferences, savePreferences } from "../lib/api.js";
 import type { Chat, Message, ModelInfo } from "../types/index.js";
 
@@ -110,9 +109,23 @@ export default function ChatPage() {
     if (!retainErrorRef.current) setError(null);
     retainErrorRef.current = false;
     fetchChat(chatId)
-      .then(({ chat: c, messages: msgs }) => {
+      .then(({ chat: c, messages: dbMsgs }) => {
         if (!active) return;
-        setChat(c); setMessages(msgs);
+        setChat(c);
+        // Preserve any optimistic messages (tmp-/ai- prefix) that haven't been
+        // saved to the DB yet — they were appended during this session.
+        // Merge: take DB messages first (chronological), then append any
+        // optimistic messages whose IDs don't exist in the DB result.
+        setMessages(prev => {
+          const dbIds = new Set(dbMsgs.map((m: Message) => m.id));
+          // Keep prev messages that are optimistic (not yet in DB) and belong to this chat
+          const pendingLocal = prev.filter(
+            m => (m.id.startsWith("tmp-") || m.id.startsWith("ai-") || m.id === "streaming")
+              && m.chatId === chatId
+              && !dbIds.has(m.id)
+          );
+          return [...dbMsgs, ...pendingLocal];
+        });
         setProvider(c.selectedProvider); setModel(c.selectedModel);
         setAttachment(null);
       })
@@ -267,17 +280,17 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full min-h-0" style={{ background: "var(--bg-base)" }}>
 
-      {/* ── top bar ── */}
+      {/* ── top bar (desktop only — mobile uses global MobileHeader in AppShell) ── */}
       <header
-        className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
+        className="hidden md:flex items-center justify-between px-4 py-2.5 flex-shrink-0"
         style={{ borderBottom: "1px solid var(--border-light)" }}
       >
         <div className="flex items-center gap-3 min-w-0">
-          {/* sidebar toggle (shown when sidebar is closed on a new chat) */}
-          {!sidebarOpen && !chatId && (
+          {/* Sidebar toggle — shown when sidebar is collapsed */}
+          {!sidebarOpen && (
             <button
               onClick={onToggleSidebar}
-              className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0"
               style={{ color: "var(--text-secondary)" }}
               onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-hover)")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
@@ -285,11 +298,6 @@ export default function ChatPage() {
             >
               <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
             </button>
-          )}
-
-          {/* Back button — always visible when inside a specific chat */}
-          {chatId && (
-            <BackButton fallback="/" label="Back to chats" />
           )}
 
           <h2
@@ -300,16 +308,15 @@ export default function ChatPage() {
           </h2>
         </div>
 
-        {/* Top Right Action Area */}
+        {/* Top Right */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setProModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs sm:text-sm font-medium text-white transition-all shadow-sm hover:brightness-110 active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium text-white transition-all shadow-sm hover:brightness-110 active:scale-95 cursor-pointer"
             style={{ background: "#1c3aa9" }}
           >
             <SparkleIcon className="w-3.5 h-3.5 text-white" />
-            <span className="hidden sm:inline">Upgrade to OBytGemini Pro</span>
-            <span className="sm:hidden">Pro</span>
+            <span>Upgrade to Pro</span>
           </button>
 
           <button
@@ -322,6 +329,26 @@ export default function ChatPage() {
           </button>
         </div>
       </header>
+
+      {/* ── mobile chat title bar (only inside an existing chat) ── */}
+      {chatId && (
+        <div
+          className="flex md:hidden items-center justify-between px-3 py-1.5 flex-shrink-0"
+          style={{ borderBottom: "1px solid var(--border-light)" }}
+        >
+          <h2 className="text-xs font-medium truncate" style={{ color: "var(--text-muted)" }}>
+            {chat?.title ?? "…"}
+          </h2>
+          <button
+            onClick={() => setProModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium text-white shrink-0"
+            style={{ background: "#1c3aa9" }}
+          >
+            <SparkleIcon className="w-3 h-3 text-white" />
+            <span>Pro</span>
+          </button>
+        </div>
+      )}
 
       {/* ── message area ── */}
       <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
@@ -353,7 +380,7 @@ export default function ChatPage() {
             onAttachmentChange={setAttachment}
           />
         ) : (
-          <div className="max-w-3xl mx-auto px-4 pt-6 pb-4 space-y-2 w-full flex-1">
+          <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-6 pb-4 space-y-2 w-full flex-1 overflow-x-hidden">
             {messages.map((msg, idx) => (
               <MessageBubble
                 key={msg.id}
@@ -367,7 +394,11 @@ export default function ChatPage() {
                 } : undefined}
               />
             ))}
-            {streamingMsg && <MessageBubble message={streamingMsg} streaming />}
+
+            {/* Streaming AI response — always rendered AFTER all existing messages */}
+            {streamingMsg && (
+              <MessageBubble key="streaming-bubble" message={streamingMsg} streaming />
+            )}
 
             {/* typing indicator while waiting for first chunk */}
             {generating && !streamingText && (

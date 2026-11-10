@@ -17,7 +17,6 @@ import {
   faPencil,
   faEllipsisVertical,
   faBookBookmark,
-  faRightFromBracket,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "../hooks/useAuth.js";
 import {
@@ -50,7 +49,7 @@ export default function Sidebar({
   chatsError,
   onChatsChanged,
 }: SidebarProps) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { chatId } = useParams();
 
@@ -504,10 +503,7 @@ export default function Sidebar({
 
           {open && (
             <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                await signOut();
-              }}
+              onClick={() => navigate("/customise")}
               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs transition-colors cursor-pointer"
               style={{ color: "var(--text-muted)" }}
               onMouseEnter={e => {
@@ -518,10 +514,10 @@ export default function Sidebar({
                 (e.currentTarget as HTMLElement).style.background = "transparent";
                 (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
               }}
-              title="Sign out of account"
+              title="Settings"
             >
-              <FontAwesomeIcon icon={faRightFromBracket} className="w-3.5 h-3.5 shrink-0" />
-              <span>Sign out</span>
+              <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5 shrink-0" />
+              <span>Settings &amp; sign out</span>
             </button>
           )}
         </div>

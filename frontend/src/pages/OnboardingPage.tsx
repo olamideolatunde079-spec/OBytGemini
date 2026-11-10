@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRight, faBrain, faImage, faGlobe, faComments } from "@fortawesome/free-solid-svg-icons";
-import BackButton from "../components/BackButton.js";
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
@@ -19,13 +18,6 @@ export default function OnboardingPage() {
           opacity: 0.6,
         }}
       />
-
-      {/* Back button — top-left, only shown when there's history to go back to */}
-      {window.history.length > 2 && (
-        <div className="absolute top-4 left-4 z-20">
-          <BackButton fallback="/signin" label="Go back" />
-        </div>
-      )}
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center max-w-2xl w-full">
