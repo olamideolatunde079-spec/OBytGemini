@@ -10,7 +10,18 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node"]
   },
-  "include": ["server.ts", "backend/src/**/*", "frontend/src/**/*"]
+  "include": [
+    "api/**/*",
+    "server.ts",
+    "backend/src/**/*",
+    "frontend/src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "frontend/dist",
+    "backend/dist"
+  ]
 }
