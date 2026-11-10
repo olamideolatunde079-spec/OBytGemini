@@ -7,6 +7,7 @@ import {
   faTrash,
   faCheck,
   faRightFromBracket,
+  faCrown,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   fetchPreferences,
@@ -18,6 +19,7 @@ import {
   fetchModels,
 } from "../lib/api.js";
 import type { Memory, ModelInfo } from "../types/index.js";
+import SparkleIcon from "../components/SparkleIcon.js";
 import { useAuth } from "../hooks/useAuth.js";
 
 interface CustomisePageProps {
@@ -299,7 +301,34 @@ export default function CustomisePage({ theme = "dark", onThemeToggle }: Customi
         </form>
       </div>
 
-      {/* 4. Account — Logout */}
+      {/* 4. Subscription / Upgrade */}
+      <div className="rounded-3xl p-6 border border-white/10 bg-[var(--bg-surface)] shadow-sm space-y-4">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <FontAwesomeIcon icon={faCrown} className="w-4 h-4 text-amber-400" />
+          <span>OBytGemini Pro</span>
+        </h3>
+        <p className="text-xs text-[var(--text-secondary)]">
+          Get expanded context windows, priority model access, unlimited notebooks, and the full creative studio.
+        </p>
+        <div className="space-y-2 text-xs text-[var(--text-secondary)]">
+          {["Up to 1M+ token context for deep document analysis", "Full access to Gemini Pro, Claude Sonnet, GPT-4o, DeepSeek R1", "Unlimited scheduled tasks and AI library saves", "Priority response speeds and dedicated support"].map(f => (
+            <div key={f} className="flex items-start gap-2">
+              <FontAwesomeIcon icon={faCheck} className="w-3 h-3 text-[var(--accent-blue)] mt-0.5 shrink-0" />
+              <span>{f}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => alert("OBytGemini Pro — All features and endpoints are fully unlocked for this session!")}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium text-white transition-all hover:brightness-110 active:scale-95"
+          style={{ background: "#1c3aa9" }}
+        >
+          <SparkleIcon className="w-3.5 h-3.5 text-white" />
+          <span>Start 14-day free trial</span>
+        </button>
+      </div>
+
+      {/* 5. Account — Logout */}
       <div className="rounded-3xl p-6 border border-white/10 bg-[var(--bg-surface)] shadow-sm space-y-4">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
           <FontAwesomeIcon icon={faRightFromBracket} className="w-4 h-4 text-[var(--text-muted)]" />

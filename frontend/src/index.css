@@ -92,8 +92,12 @@
 
   html, body, #root {
     height: 100%;
+    /* Use dynamic viewport height on mobile to avoid address-bar overlap */
+    min-height: 100dvh;
     margin: 0;
     min-width: 320px;
+    /* Prevent horizontal overflow at the document level */
+    overflow-x: hidden;
   }
 
   body {

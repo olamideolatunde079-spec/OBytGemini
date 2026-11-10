@@ -1,8 +1,19 @@
-import { useState, useEffect, useCallback } from "react";
+/**
+ * AppShell — root layout wrapper for all authenticated pages.
+ *
+ * Owns:
+ *  - Sidebar open/close state
+ *  - Theme state
+ *  - Chat list (passed into Sidebar)
+ *  - Mobile header (MobileHeader component rendered above Outlet)
+ *  - Model context state (lifted from ChatPage via onModelContextChange in Outlet context)
+ *    so MobileHeader can display and change the current model on mobile.
+ */
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar.js";
 import MobileHeader from "./MobileHeader.js";
-import type { Chat } from "../types/index.js";
+import type { Chat, ModelInfo } from "../types/index.js";
 import { fetchChats, createChat } from "../lib/api.js";
 
 function getSavedTheme(): "light" | "dark" {
@@ -21,6 +32,13 @@ export default function AppShell() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
   const [chatsError, setChatsError] = useState<string | null>(null);
+
+  /* ── Model context — lifted from ChatPage so MobileHeader can show/change model ── */
+  const [headerModels, setHeaderModels] = useState<ModelInfo[]>([]);
+  const [headerProvider, setHeaderProvider] = useState("groq");
+  const [headerModel, setHeaderModel] = useState("openai/gpt-oss-20b");
+  // Callback ref: ChatPage calls this to sync its model state up to AppShell
+  const externalModelChangeRef = useRef<((p: string, m: string) => void) | null>(null);
 
   /* Apply theme to <html> */
   useEffect(() => {
@@ -65,10 +83,9 @@ export default function AppShell() {
   useEffect(() => { refreshChats(); }, [refreshChats]);
 
   const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
-
   const toggleSidebar = () => setSidebarOpen(o => !o);
 
-  /* New-chat handler used by both sidebar and mobile header */
+  /* New-chat handler used by both Sidebar and MobileHeader */
   const handleNewChat = useCallback(async () => {
     try {
       const chat = await createChat();
@@ -77,18 +94,44 @@ export default function AppShell() {
     } catch {
       navigate("/");
     }
-    // Close sidebar on mobile after navigation
     if (window.matchMedia("(max-width: 768px)").matches) {
       setSidebarOpen(false);
     }
   }, [navigate, refreshChats]);
 
+  /**
+   * Called by MobileHeader when user picks a model from the compact selector.
+   * Forwards the change to ChatPage via the externalModelChangeRef.
+   */
+  const handleHeaderModelChange = useCallback((p: string, m: string) => {
+    setHeaderProvider(p);
+    setHeaderModel(m);
+    // Forward to ChatPage's handleModelChange
+    externalModelChangeRef.current?.(p, m);
+  }, []);
+
+  /**
+   * Passed to ChatPage via Outlet context.
+   * ChatPage calls this whenever its model state changes (load, user select, chat load).
+   */
+  const onModelContextChange = useCallback((
+    models: ModelInfo[],
+    provider: string,
+    model: string,
+    changeCallback: (p: string, m: string) => void
+  ) => {
+    setHeaderModels(models);
+    setHeaderProvider(provider);
+    setHeaderModel(model);
+    externalModelChangeRef.current = changeCallback;
+  }, []);
+
   return (
     <div
-      className="flex h-screen overflow-hidden"
-      style={{ background: "var(--bg-base)" }}
+      className="flex overflow-hidden"
+      style={{ background: "var(--bg-base)", height: "100dvh" }}
     >
-      {/* ── Sidebar drawer (desktop: push-layout | mobile: overlay) ── */}
+      {/* ── Sidebar drawer ── */}
       <Sidebar
         open={sidebarOpen}
         onToggle={toggleSidebar}
@@ -100,7 +143,7 @@ export default function AppShell() {
         onChatsChanged={refreshChats}
       />
 
-      {/* ── Mobile backdrop — tap outside drawer to close ── */}
+      {/* ── Mobile backdrop ── */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 md:hidden"
@@ -111,21 +154,22 @@ export default function AppShell() {
       )}
 
       {/* ── Main content column ── */}
-      <main
-        className="flex-1 flex flex-col overflow-hidden min-w-0"
-        // Keeps content behind the drawer on mobile but scrollable
-      >
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/*
-          ── Global mobile header ──
-          Rendered here (above Outlet) so EVERY page automatically has it.
-          Hidden on md+ (Sidebar handles its own toggle on desktop).
+          Global mobile header — rendered above every page automatically.
+          Hidden on md+ screens (Sidebar handles desktop navigation).
+          Receives model context so it can show the compact model selector.
         */}
         <MobileHeader
           onToggleSidebar={toggleSidebar}
           onNewChat={handleNewChat}
+          models={headerModels}
+          provider={headerProvider}
+          model={headerModel}
+          onModelChange={handleHeaderModelChange}
         />
 
-        {/* ── Page content (all routes render here) ── */}
+        {/* Page content */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <Outlet
             context={{
@@ -134,6 +178,7 @@ export default function AppShell() {
               onToggleSidebar: toggleSidebar,
               theme,
               onThemeToggle: toggleTheme,
+              onModelContextChange,  // ChatPage uses this to sync model state up
             }}
           />
         </div>

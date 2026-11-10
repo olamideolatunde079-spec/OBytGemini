@@ -18,13 +18,19 @@ interface OutletCtx {
   refreshChats: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  onModelContextChange?: (
+    models: ModelInfo[],
+    provider: string,
+    model: string,
+    changeCallback: (p: string, m: string) => void
+  ) => void;
 }
 
 const VISION_PROVIDERS = new Set(["google", "openai"]);
 
 export default function ChatPage() {
   const { chatId } = useParams<{ chatId: string }>();
-  const { refreshChats, sidebarOpen, onToggleSidebar } = useOutletContext<OutletCtx>();
+  const { refreshChats, sidebarOpen, onToggleSidebar, onModelContextChange } = useOutletContext<OutletCtx>();
   const navigate = useNavigate();
 
   /* ── model state — start with working defaults immediately ── */
@@ -145,6 +151,11 @@ export default function ChatPage() {
     if (p !== "google" && p !== "openai") setImageMode(false);
     savePreferences({ preferredProvider: p, preferredModel: m }).catch(() => {});
   }, []);
+
+  /* ── sync model state up to AppShell so MobileHeader can display/change it ── */
+  useEffect(() => {
+    onModelContextChange?.(models, provider, model, handleModelChange);
+  }, [models, provider, model, handleModelChange, onModelContextChange]);
 
   /* ── send message ── */
   const handleSubmit = useCallback(async (overrideText?: string) => {
@@ -330,23 +341,15 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* ── mobile chat title bar (only inside an existing chat) ── */}
+      {/* ── mobile chat title bar (only inside an existing chat, no Pro button) ── */}
       {chatId && (
         <div
-          className="flex md:hidden items-center justify-between px-3 py-1.5 flex-shrink-0"
+          className="flex md:hidden items-center px-3 py-1.5 flex-shrink-0 min-w-0"
           style={{ borderBottom: "1px solid var(--border-light)" }}
         >
-          <h2 className="text-xs font-medium truncate" style={{ color: "var(--text-muted)" }}>
+          <h2 className="text-xs font-medium truncate flex-1" style={{ color: "var(--text-muted)" }}>
             {chat?.title ?? "…"}
           </h2>
-          <button
-            onClick={() => setProModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium text-white shrink-0"
-            style={{ background: "#1c3aa9" }}
-          >
-            <SparkleIcon className="w-3 h-3 text-white" />
-            <span>Pro</span>
-          </button>
         </div>
       )}
 
@@ -465,6 +468,7 @@ export default function ChatPage() {
             attachment={attachment}
             onAttachmentChange={setAttachment}
             canAttachImages={VISION_PROVIDERS.has(provider) && selectedAvailable}
+            hideMobileModelSelector
             
           />
         </div>

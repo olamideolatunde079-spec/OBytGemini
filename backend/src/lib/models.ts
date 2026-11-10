@@ -156,17 +156,23 @@ export function getAvailableModels(): ModelInfo[] {
   return REGISTRY;
 }
 
-// Returns the default model — Gemini 3.5 Flash when key is configured,
-// otherwise the first available provider.
+// Returns the default model — Groq GPT OSS 20B when key is configured (fastest),
+// then Gemini, then first available provider.
 export function getDefaultModel(): { provider: string; model: string } {
-  // First available Gemini model
+  // First preference: Groq (fastest, most reliable for new users)
+  const groq = REGISTRY.find((m) => m.provider === "groq" && m.available);
+  if (groq) return { provider: groq.provider, model: groq.model };
+
+  // Second preference: Gemini
   const gemini = REGISTRY.find((m) => m.provider === "google" && m.available);
   if (gemini) return { provider: gemini.provider, model: gemini.model };
 
+  // Any available provider
   const first = REGISTRY.find((m) => m.available);
   if (first) return { provider: first.provider, model: first.model };
 
-  return { provider: "google", model: "gemini-3.5-flash" };
+  // Hard fallback
+  return { provider: "groq", model: "openai/gpt-oss-20b" };
 }
 
 // ── Image generation ─────────────────────────────────────────────────────────

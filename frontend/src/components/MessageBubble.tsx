@@ -272,79 +272,70 @@ export default function MessageBubble({ message, streaming, onRegenerate }: Mess
             )}
           </div>
 
-          {/* Assistant Action Buttons */}
+          {/* Assistant Action Buttons — icon-only, tooltips via title/aria-label */}
           {!isUser && !streaming && (
-            <div className="flex items-center gap-3 pt-2 text-xs text-[var(--text-muted)] opacity-80 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1 pt-2 text-xs text-[var(--text-muted)] opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
+
               {/* Copy */}
               <button
                 onClick={copyResponse}
-                className="flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1"
-                title="Copy response"
-                aria-label="Copy response"
+                className={`w-8 h-8 rounded-full flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors ${copied ? "text-green-400" : ""}`}
+                title={copied ? "Copied!" : "Copy response"}
+                aria-label={copied ? "Copied" : "Copy response"}
               >
-                <FontAwesomeIcon icon={copied ? faCheck : faCopy} className={copied ? "text-green-400" : ""} />
-                <span>{copied ? "Copied" : "Copy"}</span>
+                <FontAwesomeIcon icon={copied ? faCheck : faCopy} className="w-3.5 h-3.5" />
               </button>
 
-              {/* Read Aloud (Text to Speech) */}
+              {/* Read Aloud */}
               <button
                 onClick={toggleSpeech}
-                className={`flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1 ${
-                  isSpeaking ? "text-[#8AB4F8] font-medium" : ""
-                }`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors ${isSpeaking ? "text-[#8AB4F8]" : ""}`}
                 title={isSpeaking ? "Stop reading" : "Read aloud"}
-                aria-label="Read aloud"
+                aria-label={isSpeaking ? "Stop reading" : "Read aloud"}
               >
-                <FontAwesomeIcon icon={isSpeaking ? faStop : faVolumeHigh} />
-                <span>{isSpeaking ? "Stop" : "Read aloud"}</span>
+                <FontAwesomeIcon icon={isSpeaking ? faStop : faVolumeHigh} className="w-3.5 h-3.5" />
               </button>
 
               {/* Regenerate */}
               {onRegenerate && (
                 <button
                   onClick={onRegenerate}
-                  className="flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1"
-                  title="Regenerate"
-                  aria-label="Regenerate"
+                  className="w-8 h-8 rounded-full flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+                  title="Regenerate response"
+                  aria-label="Regenerate response"
                 >
-                  <FontAwesomeIcon icon={faRotateRight} />
-                  <span>Regenerate</span>
+                  <FontAwesomeIcon icon={faRotateRight} className="w-3.5 h-3.5" />
                 </button>
               )}
 
-              {/* Thumbs Up / Down */}
+              {/* Thumbs Up */}
               <button
                 onClick={() => setFeedback(feedback === "up" ? null : "up")}
-                className={`p-1 hover:text-[var(--text-primary)] transition-colors ${
-                  feedback === "up" ? "text-green-400" : ""
-                }`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors ${feedback === "up" ? "text-green-400" : ""}`}
                 title="Good response"
-                aria-label="Thumbs up"
+                aria-label="Good response"
               >
-                <FontAwesomeIcon icon={faThumbsUp} />
+                <FontAwesomeIcon icon={faThumbsUp} className="w-3.5 h-3.5" />
               </button>
+
+              {/* Thumbs Down */}
               <button
                 onClick={() => setFeedback(feedback === "down" ? null : "down")}
-                className={`p-1 hover:text-[var(--text-primary)] transition-colors ${
-                  feedback === "down" ? "text-red-400" : ""
-                }`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors ${feedback === "down" ? "text-red-400" : ""}`}
                 title="Bad response"
-                aria-label="Thumbs down"
+                aria-label="Bad response"
               >
-                <FontAwesomeIcon icon={faThumbsDown} />
+                <FontAwesomeIcon icon={faThumbsDown} className="w-3.5 h-3.5" />
               </button>
 
               {/* Save to Library */}
               <button
                 onClick={handleSaveToLibrary}
-                className={`flex items-center gap-1.5 hover:text-[var(--text-primary)] transition-colors p-1 ${
-                  savedToLibrary ? "text-[#8AB4F8]" : ""
-                }`}
-                title="Save to Library"
-                aria-label="Save to Library"
+                className={`w-8 h-8 rounded-full flex items-center justify-center hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors ${savedToLibrary ? "text-[#8AB4F8]" : ""}`}
+                title={savedToLibrary ? "Saved to Library" : "Save to Library"}
+                aria-label={savedToLibrary ? "Saved to Library" : "Save to Library"}
               >
-                <FontAwesomeIcon icon={faBookmark} />
-                <span>{savedToLibrary ? "Saved" : "Save"}</span>
+                <FontAwesomeIcon icon={faBookmark} className="w-3.5 h-3.5" />
               </button>
             </div>
           )}

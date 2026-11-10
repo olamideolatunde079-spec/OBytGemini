@@ -56,7 +56,7 @@ export default function WelcomeScreen({
   ];
 
   return (
-    <div className="relative flex-1 flex flex-col items-center justify-center w-full px-4 min-h-[500px]">
+    <div className="relative flex-1 flex flex-col items-center justify-center w-full px-4 overflow-hidden min-h-0">
       {/* Background Ambient Glow */}
       <div
         className="absolute inset-0 pointer-events-none gemini-ambient-glow z-0"
@@ -66,12 +66,12 @@ export default function WelcomeScreen({
       {/* Main Centered Content */}
       <div className="relative z-10 flex flex-col items-center w-full max-w-2xl text-center">
         {/* Heading */}
-        <h1 className="text-3xl sm:text-4xl md:text-[42px] font-normal tracking-tight text-[var(--text-primary)] mb-8 select-none">
+        <h1 className="text-2xl sm:text-4xl md:text-[42px] font-normal tracking-tight text-[var(--text-primary)] mb-4 sm:mb-8 select-none">
           Where should we start?
         </h1>
 
         {/* Embedded Composer in Center */}
-        <div className="w-full mb-7">
+        <div className="w-full mb-4 sm:mb-7">
           <PromptComposer
             value={input}
             onChange={setInput}

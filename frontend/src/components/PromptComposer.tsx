@@ -1,4 +1,20 @@
-import { useRef, useEffect, useState, type KeyboardEvent } from "react";
+/**
+ * PromptComposer — message input pill.
+ *
+ * Key mobile fix:
+ *  - `hideMobileModelSelector` prop (true when used in ChatPage on mobile).
+ *    On mobile the model selector lives in MobileHeader; removing it from the
+ *    pill gives the textarea ~160px extra space and eliminates the vertical-text squeeze.
+ *  - On desktop (md+) the model selector always shows inside the pill as before.
+ *
+ * Model dropdown uses `position: fixed` calculated from the button's bounding rect
+ * so it escapes any `overflow: hidden` ancestor (AppShell > main has overflow:hidden).
+ *
+ * Attachment (+) button: opens a small dropdown with three options. Each option
+ * sets `fileInputRef.current.accept` then calls `.click()` — this is the standard
+ * programmatic file-picker trigger that works on both desktop and mobile browsers.
+ */
+import { useRef, useEffect, useState, useCallback, type KeyboardEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -10,6 +26,7 @@ import {
   faFileLines,
   faCode,
   faChevronDown,
+  faCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import type { ModelInfo } from "../types/index.js";
 
@@ -37,7 +54,19 @@ interface PromptComposerProps {
   canGenerateImages?: boolean;
   onImageModeChange?: (v: boolean) => void;
   canAttachImages?: boolean;
+  /** When true, hides the model selector inside the pill on mobile (<md).
+   *  Use this when the model selector lives in MobileHeader instead. */
+  hideMobileModelSelector?: boolean;
 }
+
+/** Provider brand colors for the selector dot */
+const PROVIDER_COLORS: Record<string, string> = {
+  google:    "#4285F4",
+  openai:    "#10a37f",
+  groq:      "#f55036",
+  anthropic: "#da7756",
+  deepseek:  "#5b8cff",
+};
 
 export default function PromptComposer({
   value,
@@ -53,25 +82,26 @@ export default function PromptComposer({
   onAttachmentChange,
   disabled,
   placeholder = "Ask OBytGemini",
+  hideMobileModelSelector = false,
 }: PromptComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const modelMenuRef = useRef<HTMLDivElement>(null);
+  const modelBtnRef = useRef<HTMLButtonElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState({ bottom: 0, right: 0, width: 288 });
   const [isRecording, setIsRecording] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
 
-  // Refs to access latest value/onChange inside the recognition callback
-  // without re-creating the SpeechRecognition instance on every keystroke
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   useEffect(() => { valueRef.current = value; }, [value]);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
-  /* Auto-resize textarea */
+  /* ── Auto-resize textarea ── */
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -79,77 +109,93 @@ export default function PromptComposer({
     ta.style.height = `${Math.min(ta.scrollHeight, 180)}px`;
   }, [value]);
 
-  /* Speech recognition setup — only run ONCE on mount, not on every keystroke */
+  /* ── Speech recognition (runs ONCE on mount) ── */
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
-      return;
-    }
-
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { setSpeechSupported(false); return; }
     try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = "en-US";
-
-      recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        onChangeRef.current(valueRef.current ? `${valueRef.current} ${transcript}` : transcript);
+      const r = new SR();
+      r.continuous = true; r.interimResults = true; r.lang = "en-US";
+      r.onresult = (e: any) => {
+        let t = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript;
+        onChangeRef.current(valueRef.current ? `${valueRef.current} ${t}` : t);
       };
-
-      recognition.onerror = () => { setIsRecording(false); };
-      recognition.onend = () => { setIsRecording(false); };
-      recognitionRef.current = recognition;
-    } catch {
-      setSpeechSupported(false);
-    }
-
-    return () => { recognitionRef.current?.stop(); };
+      r.onerror = () => setIsRecording(false);
+      r.onend = () => setIsRecording(false);
+      recognitionRef.current = r;
+    } catch { setSpeechSupported(false); }
+    return () => recognitionRef.current?.stop();
   }, []);
 
   const toggleRecording = () => {
     if (!recognitionRef.current) return;
-    if (isRecording) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsRecording(true);
-      } catch {
-        setIsRecording(false);
-      }
-    }
+    if (isRecording) { recognitionRef.current.stop(); setIsRecording(false); }
+    else { try { recognitionRef.current.start(); setIsRecording(true); } catch { setIsRecording(false); } }
   };
 
-  /* Close dropdowns on click outside */
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
-        setModelDropdownOpen(false);
-      }
-      const target = e.target as HTMLElement;
-      if (!target.closest("#attachment-menu-trigger") && !target.closest("#attachment-menu-dropdown")) {
-        setAttachMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+  /* ── Open model dropdown — fixed positioning to escape overflow:hidden ── */
+  const openModelDropdown = useCallback(() => {
+    if (!modelBtnRef.current) return;
+    const rect = modelBtnRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const dropW = Math.min(288, vw - 16);
+    // position above the button, aligned to its right edge
+    const right = vw - rect.right;
+    const bottom = window.innerHeight - rect.top + 8;
+    setDropdownPos({ bottom, right: Math.max(8, right), width: dropW });
+    setModelDropdownOpen(true);
   }, []);
+
+  /* ── Close model dropdown on outside click / touch / Escape ── */
+  useEffect(() => {
+    if (!modelDropdownOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (
+        modelDropdownRef.current && !modelDropdownRef.current.contains(t) &&
+        modelBtnRef.current && !modelBtnRef.current.contains(t)
+      ) setModelDropdownOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setModelDropdownOpen(false); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    document.addEventListener("keydown", esc as any);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+      document.removeEventListener("keydown", esc as any);
+    };
+  }, [modelDropdownOpen]);
+
+  /* ── Close attach menu on outside click ── */
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest("#attach-btn") && !t.closest("#attach-menu")) setAttachMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("touchstart", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [attachMenuOpen]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      // Allow sending even while AI is generating — concurrent messages
-      if ((value.trim() || attachment) && !disabled) {
-        onSubmit();
-      }
+      if ((value.trim() || attachment) && !disabled) onSubmit();
     }
+  };
+
+  const triggerFilePicker = (accept: string) => {
+    if (!fileInputRef.current) return;
+    fileInputRef.current.accept = accept;
+    fileInputRef.current.value = "";           // reset so same file can be re-selected
+    fileInputRef.current.click();
+    setAttachMenuOpen(false);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,30 +203,25 @@ export default function PromptComposer({
     if (!file) return;
     e.target.value = "";
 
-    const reader = new FileReader();
     if (file.type.startsWith("image/")) {
-      reader.onload = () => {
-        onAttachmentChange({
-          dataUrl: reader.result as string,
-          mimeType: file.type,
-          name: file.name,
-        });
-      };
+      const reader = new FileReader();
+      reader.onload = () => onAttachmentChange({ dataUrl: reader.result as string, mimeType: file.type, name: file.name });
       reader.readAsDataURL(file);
     } else {
-      // Document or text or code file
+      const reader = new FileReader();
       reader.onload = () => {
-        const textContent = reader.result as string;
-        const snippet = `\n\n\`\`\`${file.name.split(".").pop() || "txt"}\n// File: ${file.name}\n${textContent.slice(0, 5000)}\n\`\`\``;
+        const text = reader.result as string;
+        const ext = file.name.split(".").pop() || "txt";
+        const snippet = `\n\n\`\`\`${ext}\n// File: ${file.name}\n${text.slice(0, 5000)}\n\`\`\``;
         onChange(value + snippet);
       };
       reader.readAsText(file);
     }
-    setAttachMenuOpen(false);
   };
 
-  const currentModel = models.find((m) => m.provider === provider && m.model === model);
-  const displayModelName = currentModel?.displayName || "Gemini Auto";
+  const currentModel = models.find(m => m.provider === provider && m.model === model);
+  const displayModelName = currentModel?.displayName ?? "Groq";
+  const providerColor = PROVIDER_COLORS[provider] ?? "var(--accent-blue)";
 
   return (
     <div className="w-full max-w-2xl mx-auto px-2 sm:px-4 relative min-w-0">
@@ -190,233 +231,206 @@ export default function PromptComposer({
         type="file"
         className="hidden"
         onChange={handleFileUpload}
+        aria-hidden="true"
       />
 
-      {/* Attachment Preview Chip */}
+      {/* Attachment preview chip */}
       {attachment && (
         <div className="mb-2 flex items-center gap-2">
-          <div className="relative inline-flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-[var(--bg-surface-secondary)] border border-white/10 text-xs">
+          <div className="relative inline-flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-[var(--bg-surface-secondary)] border border-white/10 text-xs max-w-full">
             {attachment.mimeType.startsWith("image/") ? (
-              <img
-                src={attachment.dataUrl}
-                alt="Upload"
-                className="w-6 h-6 rounded-md object-cover"
-              />
+              <img src={attachment.dataUrl} alt="Upload" className="w-6 h-6 rounded-md object-cover shrink-0" />
             ) : (
-              <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5 text-[#8AB4F8]" />
+              <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5 text-[#8AB4F8] shrink-0" />
             )}
-            <span className="text-[var(--text-primary)] max-w-xs truncate">
-              {attachment.name || "Attachment"}
+            <span className="text-[var(--text-primary)] truncate max-w-[180px] sm:max-w-xs">
+              {attachment.name ?? "Attachment"}
             </span>
-            <button
-              onClick={() => onAttachmentChange(null)}
-              className="ml-1 text-[var(--text-muted)] hover:text-white transition-colors"
-              aria-label="Remove attachment"
-            >
+            <button onClick={() => onAttachmentChange(null)} className="ml-1 text-[var(--text-muted)] hover:text-white transition-colors shrink-0" aria-label="Remove attachment">
               <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Main Pill-Shaped Composer */}
+      {/* ── Main pill ── */}
       <div
         className={`
-          composer-pill
-          gap-2 px-3 py-2 rounded-full border transition-all duration-150 shadow-md
-          ${
-            isRecording
-              ? "ring-2 ring-red-500/50 border-red-500"
-              : "border-white/10 hover:border-white/20 focus-within:border-white/25"
-          }
+          composer-pill gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 rounded-full border
+          transition-all duration-150 shadow-md
+          ${isRecording ? "ring-2 ring-red-500/50 border-red-500" : "border-white/10 hover:border-white/20 focus-within:border-white/25"}
         `}
         style={{ background: "var(--bg-surface)" }}
       >
-        {/* Left Attachment Button (+) */}
-        <div className="relative">
+        {/* ── Attachment (+) button ── */}
+        <div className="relative shrink-0">
           <button
+            id="attach-btn"
             type="button"
-            onClick={() => setAttachMenuOpen((v) => !v)}
+            onClick={() => setAttachMenuOpen(v => !v)}
             disabled={disabled}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors shrink-0"
-            title="Attach file or image"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors"
+            title="Attach file"
             aria-label="Add attachment"
+            aria-haspopup="true"
+            aria-expanded={attachMenuOpen}
           >
-            <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+            <FontAwesomeIcon icon={faPlus} className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
-          {/* Attachment Dropdown Menu */}
+          {/* Attach dropdown */}
           {attachMenuOpen && (
             <div
-              id="attachment-menu-dropdown"
-              className="absolute left-0 bottom-12 z-50 w-48 rounded-2xl py-1.5 shadow-2xl border border-white/10 backdrop-blur-md"
+              id="attach-menu"
+              className="absolute left-0 bottom-11 z-50 w-44 rounded-2xl py-1.5 shadow-2xl border border-white/10 backdrop-blur-md"
               style={{ background: "var(--bg-surface-secondary)" }}
             >
-              <button
-                type="button"
-                onClick={() => {
-                  if (fileInputRef.current) {
-                    fileInputRef.current.accept = "image/*";
-                    fileInputRef.current.click();
-                  }
-                }}
-                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left"
-              >
-                <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5 text-[#8AB4F8]" />
+              <button type="button" onClick={() => triggerFilePicker("image/*")}
+                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5 text-[#8AB4F8] shrink-0" />
                 <span>Upload image</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (fileInputRef.current) {
-                    fileInputRef.current.accept = ".pdf,.doc,.docx,.txt,.md";
-                    fileInputRef.current.click();
-                  }
-                }}
-                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left"
-              >
-                <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5 text-purple-400" />
+              <button type="button" onClick={() => triggerFilePicker(".pdf,.doc,.docx,.txt,.md")}
+                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <FontAwesomeIcon icon={faFileLines} className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                 <span>Upload document</span>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (fileInputRef.current) {
-                    fileInputRef.current.accept = ".js,.ts,.tsx,.jsx,.py,.html,.css,.json";
-                    fileInputRef.current.click();
-                  }
-                }}
-                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left"
-              >
-                <FontAwesomeIcon icon={faCode} className="w-3.5 h-3.5 text-emerald-400" />
+              <button type="button" onClick={() => triggerFilePicker(".js,.ts,.tsx,.jsx,.py,.html,.css,.json")}
+                className="flex items-center gap-3 w-full px-3.5 py-2 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-left">
+                <FontAwesomeIcon icon={faCode} className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>Upload code</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Text Input — composer-textarea class applies all mobile-safe rules */}
+        {/* ── Textarea ── */}
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isRecording ? "Listening to your voice..." : placeholder}
+          placeholder={isRecording ? "Listening…" : placeholder}
           rows={1}
           disabled={disabled}
           className="composer-textarea text-[var(--text-primary)] placeholder-gray-500 py-1.5 px-1"
           aria-label="Message input"
+          aria-multiline="true"
         />
 
-        {/* Right Section: Model Selector & Actions */}
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Model Selector Pill */}
-          <div className="relative" ref={modelMenuRef}>
+        {/* ── Right controls ── */}
+        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+
+          {/* Model selector — hidden on mobile when hideMobileModelSelector=true */}
+          <div className={`relative ${hideMobileModelSelector ? "hidden md:block" : "block"}`}>
             <button
+              ref={modelBtnRef}
               type="button"
-              onClick={() => setModelDropdownOpen((v) => !v)}
+              onClick={openModelDropdown}
               disabled={disabled}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-full text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
               title="Select Model"
+              aria-haspopup="listbox"
+              aria-expanded={modelDropdownOpen}
             >
-              <span className="truncate max-w-[80px] sm:max-w-[120px]">{displayModelName}</span>
+              <span
+                className="w-2 h-2 rounded-full shrink-0 hidden sm:inline-block"
+                style={{ background: providerColor }}
+              />
+              <span className="truncate max-w-[70px] sm:max-w-[110px]">{displayModelName}</span>
               <FontAwesomeIcon
                 icon={faChevronDown}
-                className={`w-2.5 h-2.5 transition-transform ${modelDropdownOpen ? "rotate-180" : ""}`}
+                className={`w-2 h-2 sm:w-2.5 sm:h-2.5 transition-transform shrink-0 ${modelDropdownOpen ? "rotate-180" : ""}`}
               />
             </button>
-
-            {/* Model Dropdown */}
-            {modelDropdownOpen && (
-              <div
-                className="absolute right-0 bottom-12 z-50 rounded-2xl py-2 shadow-2xl border border-white/10 overflow-y-auto"
-                style={{
-                  width: "min(288px, calc(100vw - 2rem))",
-                  maxHeight: "60vh",
-                  background: "var(--bg-surface-secondary)",
-                }}
-              >
-                <div className="px-3 py-1 text-xs font-semibold text-[var(--text-muted)] border-b border-white/5 pb-1 mb-1">
-                  Model Selector
-                </div>
-                {models.map((m) => {
-                  const isSelected = m.provider === provider && m.model === model;
-                  return (
-                    <button
-                      key={`${m.provider}/${m.model}`}
-                      type="button"
-                      onClick={() => {
-                        onModelChange(m.provider, m.model);
-                        setModelDropdownOpen(false);
-                      }}
-                      className={`
-                        flex items-center justify-between w-full px-3 py-2 text-xs text-left transition-colors
-                        ${isSelected ? "bg-[var(--accent-bg)] text-[#8AB4F8]" : "text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"}
-                      `}
-                    >
-                      <div className="truncate pr-2">
-                        <div className="font-medium truncate">{m.displayName}</div>
-                        <div className="text-[10px] text-[var(--text-muted)] truncate capitalize">
-                          {m.provider}
-                        </div>
-                      </div>
-                      {isSelected && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#8AB4F8] shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
-          {/* Microphone Button */}
+          {/* Microphone */}
           {speechSupported && (
             <button
               type="button"
               onClick={toggleRecording}
               disabled={disabled}
-              className={`
-                w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0
-                ${
-                  isRecording
-                    ? "bg-red-500 text-white animate-pulse"
-                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
-                }
-              `}
-              title={isRecording ? "Stop recording" : "Voice input (Speech to text)"}
-              aria-label="Microphone"
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all shrink-0
+                ${isRecording ? "bg-red-500 text-white animate-pulse" : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"}`}
+              title={isRecording ? "Stop recording" : "Voice input"}
+              aria-label={isRecording ? "Stop recording" : "Start voice input"}
             >
-              <FontAwesomeIcon icon={faMicrophone} className="w-3.5 h-3.5" />
+              <FontAwesomeIcon icon={faMicrophone} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
 
-          {/* Send or Stop Generation Button */}
+          {/* Send / Stop */}
           {loading ? (
             <button
               type="button"
               onClick={onCancel}
-              className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--bg-hover)] text-white hover:bg-white/20 transition-colors shrink-0"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center bg-[var(--bg-hover)] text-white hover:bg-white/20 transition-colors shrink-0"
               title="Stop generation"
               aria-label="Stop generation"
             >
-              <FontAwesomeIcon icon={faStop} className="w-3.5 h-3.5" />
+              <FontAwesomeIcon icon={faStop} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
           ) : (
             (value.trim().length > 0 || attachment !== null) && !disabled && (
               <button
                 type="button"
                 onClick={onSubmit}
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all shrink-0 shadow-sm"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center bg-white text-black hover:bg-white/90 transition-all shrink-0 shadow-sm"
                 title="Send message"
                 aria-label="Send message"
               >
-                <FontAwesomeIcon icon={faArrowUp} className="w-3.5 h-3.5" />
+                <FontAwesomeIcon icon={faArrowUp} className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               </button>
             )
           )}
         </div>
       </div>
+
+      {/* ── Model dropdown — fixed to escape overflow:hidden ancestors ── */}
+      {modelDropdownOpen && (
+        <div
+          ref={modelDropdownRef}
+          role="listbox"
+          aria-label="Select AI model"
+          className="fixed z-[200] rounded-2xl shadow-2xl overflow-y-auto"
+          style={{
+            bottom: dropdownPos.bottom,
+            right: dropdownPos.right,
+            width: dropdownPos.width,
+            maxHeight: "55vh",
+            background: "var(--bg-surface-secondary)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div className="px-3 py-1.5 text-xs font-semibold text-[var(--text-muted)] border-b border-white/5 pb-1.5 mb-1 sticky top-0"
+            style={{ background: "var(--bg-surface-secondary)" }}>
+            Model Selector
+          </div>
+          {models.map(m => {
+            const isSelected = m.provider === provider && m.model === model;
+            return (
+              <button
+                key={`${m.provider}/${m.model}`}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                disabled={!m.available}
+                onClick={() => { onModelChange(m.provider, m.model); setModelDropdownOpen(false); }}
+                className={`flex items-center justify-between w-full px-3 py-2.5 text-xs text-left transition-colors
+                  ${isSelected ? "bg-[var(--accent-bg)] text-[#8AB4F8]" : "text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"}`}
+                style={{ opacity: m.available ? 1 : 0.4, cursor: m.available ? "pointer" : "not-allowed" }}
+              >
+                <div className="min-w-0 pr-2">
+                  <div className="font-medium truncate">{m.displayName}</div>
+                  <div className="text-[10px] text-[var(--text-muted)] capitalize truncate">{m.provider}</div>
+                </div>
+                {isSelected && <FontAwesomeIcon icon={faCheck} className="w-3 h-3 shrink-0 text-[#8AB4F8]" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

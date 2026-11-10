@@ -517,7 +517,7 @@ export default function Sidebar({
               title="Settings"
             >
               <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5 shrink-0" />
-              <span>Settings &amp; sign out</span>
+              <span>Settings</span>
             </button>
           )}
         </div>
