@@ -150,7 +150,7 @@ export default function MobileHeader({
           onClick={onToggleSidebar}
           aria-label="Open navigation menu"
           className="
-            w-11 h-11 rounded-full shrink-0
+            w-12 h-12 rounded-full shrink-0
             flex items-center justify-center
             text-[var(--text-secondary)]
             hover:text-[var(--text-primary)]
@@ -158,7 +158,7 @@ export default function MobileHeader({
             active:scale-95 transition-all
           "
         >
-          <FontAwesomeIcon icon={faBars} className="w-5 h-5" />
+          <FontAwesomeIcon icon={faBars} className="w-6 h-6" />
         </button>
 
         {/* Compact model selector — expands to fill available space */}
@@ -218,7 +218,7 @@ export default function MobileHeader({
           aria-label="New chat"
           title="New chat"
           className="
-            w-11 h-11 rounded-full shrink-0
+            w-12 h-12 rounded-full shrink-0
             flex items-center justify-center
             text-[var(--text-secondary)]
             hover:text-[var(--text-primary)]
@@ -226,7 +226,7 @@ export default function MobileHeader({
             active:scale-95 transition-all
           "
         >
-          <FontAwesomeIcon icon={faPenToSquare} className="w-5 h-5" />
+          <FontAwesomeIcon icon={faPenToSquare} className="w-6 h-6" />
         </button>
       </header>
 
