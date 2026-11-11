@@ -306,32 +306,47 @@ router.post("/:id/messages", async (req: Request, res: Response): Promise<void> 
     return { role: "user" as const, content: m.content };
   });
 
-  // Add the current user turn — with optional image attachment for vision models
-  const hasAttachment =
+  // Add the current user turn — with optional attachment
+  // Vision (image) content parts: only google and openai support them via AI SDK.
+  // For other providers (groq, anthropic, deepseek): image attachments are
+  // described in a text prefix so the model at least knows an image was sent.
+  // Document/text attachments are already injected as a code-block in the user
+  // message text by the frontend, so no extra handling needed here.
+  const hasImageAttachment =
     parsed.data.attachmentDataUrl &&
-    parsed.data.attachmentMimeType &&
-    (provider === "google" || provider === "openai");
+    parsed.data.attachmentMimeType?.startsWith("image/");
 
-  if (hasAttachment && parsed.data.attachmentDataUrl && parsed.data.attachmentMimeType) {
-    // Extract base64 from data URL (strip "data:image/png;base64," prefix)
-    const base64 = parsed.data.attachmentDataUrl.includes(",")
-      ? parsed.data.attachmentDataUrl.split(",")[1]
-      : parsed.data.attachmentDataUrl;
+  const hasVisionSupport = provider === "google" || provider === "openai";
 
-    aiMessages.push({
-      role: "user",
-      content: [
-        { type: "text", text: parsed.data.content },
-        {
-          type: "image",
-          image: base64,
-          mediaType: parsed.data.attachmentMimeType,
-        },
-      ],
-    });
+  if (hasImageAttachment && parsed.data.attachmentDataUrl && parsed.data.attachmentMimeType) {
+    if (hasVisionSupport) {
+      // Strip "data:image/png;base64," prefix — AI SDK wants raw base64
+      const base64 = parsed.data.attachmentDataUrl.includes(",")
+        ? parsed.data.attachmentDataUrl.split(",")[1]
+        : parsed.data.attachmentDataUrl;
+
+      aiMessages.push({
+        role: "user",
+        content: [
+          { type: "text", text: parsed.data.content },
+          {
+            type: "image",
+            image: base64,
+            mediaType: parsed.data.attachmentMimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
+          },
+        ],
+      });
+    } else {
+      // Non-vision provider: describe the image in text so the user knows
+      const notice = `[User attached an image (${parsed.data.attachmentMimeType}). This provider does not support vision. Please switch to Gemini or OpenAI to analyze images.]\n\n`;
+      aiMessages.push({ role: "user", content: notice + parsed.data.content });
+    }
   } else {
     aiMessages.push({ role: "user", content: parsed.data.content });
   }
+
+  // Keep hasAttachment for the image-generation auto-detect gate below
+  const hasAttachment = Boolean(hasImageAttachment);
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");

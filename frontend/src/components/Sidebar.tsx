@@ -484,42 +484,21 @@ export default function Sidebar({
               </div>
             )}
 
-            {open && (
+          {open && (
               <>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-[var(--text-primary)] truncate">
                     {user?.name || "Olamide Olatunde"}
                   </p>
+                  <p className="text-[10px] text-[var(--text-muted)] truncate">
+                    Settings &amp; account
+                  </p>
                 </div>
-                <button
-                  className="w-6 h-6 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                  aria-label="Settings"
-                >
-                  <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5" />
-                </button>
+                <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
               </>
             )}
           </div>
 
-          {open && (
-            <button
-              onClick={() => navigate("/customise")}
-              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs transition-colors cursor-pointer"
-              style={{ color: "var(--text-muted)" }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.background = "var(--bg-hover)";
-                (e.currentTarget as HTMLElement).style.color = "var(--text-primary)";
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.background = "transparent";
-                (e.currentTarget as HTMLElement).style.color = "var(--text-muted)";
-              }}
-              title="Settings"
-            >
-              <FontAwesomeIcon icon={faGear} className="w-3.5 h-3.5 shrink-0" />
-              <span>Settings</span>
-            </button>
-          )}
         </div>
       </aside>
     </>

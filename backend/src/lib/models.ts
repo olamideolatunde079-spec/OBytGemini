@@ -54,19 +54,32 @@ export function getProviderFailureMessage(error: unknown, provider: string): str
 }
 
 // ── Central model registry ────────────────────────────────────────────────────
-// Gemini is first (default when key is configured).
-// Models verified working with the current key format on 2026-11-02:
-//   - gemini-3.5-flash     ✅ works
-//   - gemini-3.5-flash-lite ✅ works
-//   - gemini-3.8-flash     ❌ 503 high demand
+// Groq is listed first — it is the application default (fastest, lowest latency).
+// getDefaultModel() returns the first Groq entry when GROQ_API_KEY is configured.
 const REGISTRY: ModelInfo[] = [
-  // ── Google Gemini ── PRIMARY DEFAULT
+  // ── Groq ── DEFAULT (fastest, most reliable)
+  {
+    provider: "groq",
+    model: "openai/gpt-oss-20b",
+    displayName: "GPT OSS 20B (Groq)",
+    available: Boolean(process.env.GROQ_API_KEY?.trim()),
+    description: "Fastest Groq model — OBytGemini default",
+  },
+  {
+    provider: "groq",
+    model: "openai/gpt-oss-120b",
+    displayName: "GPT OSS 120B (Groq)",
+    available: Boolean(process.env.GROQ_API_KEY?.trim()),
+    description: "High-quality open-weight 120B model on Groq",
+  },
+
+  // ── Google Gemini ──
   {
     provider: "google",
     model: "gemini-3.5-flash",
     displayName: "Gemini 3.5 Flash",
     available: isGeminiKeyConfigured(),
-    description: "Fast, capable Gemini model — OBytGemini default",
+    description: "Fast, capable Gemini model with vision support",
   },
   {
     provider: "google",
@@ -81,22 +94,6 @@ const REGISTRY: ModelInfo[] = [
     displayName: "Gemini 3.8 Flash",
     available: isGeminiKeyConfigured(),
     description: "Latest Gemini model (may be under high demand at peak times)",
-  },
-
-  // ── Groq ── (verified working)
-  {
-    provider: "groq",
-    model: "openai/gpt-oss-120b",
-    displayName: "GPT OSS 120B (Groq)",
-    available: Boolean(process.env.GROQ_API_KEY?.trim()),
-    description: "Fast open-weight 120B model on Groq",
-  },
-  {
-    provider: "groq",
-    model: "openai/gpt-oss-20b",
-    displayName: "GPT OSS 20B (Groq)",
-    available: Boolean(process.env.GROQ_API_KEY?.trim()),
-    description: "Lightest, fastest model on Groq",
   },
 
   // ── OpenAI ──

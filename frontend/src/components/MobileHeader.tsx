@@ -144,13 +144,13 @@ export default function MobileHeader({
           minHeight: "48px",
         }}
       >
-        {/* Hamburger */}
+        {/* Hamburger — slightly larger icon for easier tap recognition */}
         <button
           type="button"
           onClick={onToggleSidebar}
           aria-label="Open navigation menu"
           className="
-            w-10 h-10 rounded-full shrink-0
+            w-11 h-11 rounded-full shrink-0
             flex items-center justify-center
             text-[var(--text-secondary)]
             hover:text-[var(--text-primary)]
@@ -158,7 +158,7 @@ export default function MobileHeader({
             active:scale-95 transition-all
           "
         >
-          <FontAwesomeIcon icon={faBars} className="w-4 h-4" />
+          <FontAwesomeIcon icon={faBars} className="w-5 h-5" />
         </button>
 
         {/* Compact model selector — expands to fill available space */}
@@ -211,14 +211,14 @@ export default function MobileHeader({
           </span>
         )}
 
-        {/* New Chat */}
+        {/* New Chat — slightly larger icon */}
         <button
           type="button"
           onClick={onNewChat}
           aria-label="New chat"
           title="New chat"
           className="
-            w-10 h-10 rounded-full shrink-0
+            w-11 h-11 rounded-full shrink-0
             flex items-center justify-center
             text-[var(--text-secondary)]
             hover:text-[var(--text-primary)]
@@ -226,7 +226,7 @@ export default function MobileHeader({
             active:scale-95 transition-all
           "
         >
-          <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+          <FontAwesomeIcon icon={faPenToSquare} className="w-5 h-5" />
         </button>
       </header>
 

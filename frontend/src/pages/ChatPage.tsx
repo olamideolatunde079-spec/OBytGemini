@@ -336,7 +336,7 @@ export default function ChatPage() {
             title="New Chat"
             aria-label="New chat"
           >
-            <FontAwesomeIcon icon={faPenToSquare} className="w-4 h-4" />
+            <FontAwesomeIcon icon={faPenToSquare} className="w-5 h-5" />
           </button>
         </div>
       </header>
@@ -354,10 +354,12 @@ export default function ChatPage() {
       )}
 
       {/* ── message area ── */}
-      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col relative">
+        {/* Persistent blue ambient glow — same visual identity on all chat pages */}
+        <div className="absolute inset-0 pointer-events-none gemini-ambient-glow z-0" aria-hidden="true" />
         {loadingChat ? (
           /* skeleton loader */
-          <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 w-full">
+          <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 w-full relative z-10">
             {[...Array(3)].map((_, i) => (
               <div key={i} className={`flex gap-3 ${i % 2 === 0 ? "" : "justify-end"}`}>
                 {i % 2 === 0 && <div className="w-8 h-8 rounded-full animate-pulse flex-shrink-0" style={{ background: "var(--bg-hover)" }} />}
@@ -383,7 +385,7 @@ export default function ChatPage() {
             onAttachmentChange={setAttachment}
           />
         ) : (
-          <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-6 pb-4 space-y-2 w-full flex-1 overflow-x-hidden">
+          <div className="max-w-3xl mx-auto px-3 sm:px-4 pt-6 pb-4 space-y-2 w-full flex-1 overflow-x-hidden relative z-10">
             {messages.map((msg, idx) => (
               <MessageBubble
                 key={msg.id}
